@@ -42,7 +42,8 @@
 #include "rf_phy_driver.h"
 #include "flash.h"
 #include "version.h"
-
+// patch max gatt num conn
+#include "host_cfg.h"
 #define DEFAULT_UART_BAUD   115200
 
 
@@ -87,9 +88,10 @@ extern void hal_rom_boot_init(void);
                                              + ((BLE_PKT_VERSION == BLE_PKT_VERSION_4_0) ? 1 : 0) * BLE_PKT40_LEN \
                                              + (sizeof(struct ll_pkt_desc) - 2))
 
-#define   BLE_MAX_ALLOW_PER_CONNECTION          ( (BLE_MAX_ALLOW_PKT_PER_EVENT_TX * BLE_PKT_BUF_SIZE*2) \
-                                                  +(BLE_MAX_ALLOW_PKT_PER_EVENT_RX * BLE_PKT_BUF_SIZE)   \
-                                                  + BLE_PKT_BUF_SIZE )
+//#define   BLE_MAX_ALLOW_PER_CONNECTION          ( (BLE_MAX_ALLOW_PKT_PER_EVENT_TX * BLE_PKT_BUF_SIZE*2) \
+//                                                  +(BLE_MAX_ALLOW_PKT_PER_EVENT_RX * BLE_PKT_BUF_SIZE)   \
+//                                                  + BLE_PKT_BUF_SIZE )
+#define   BLE_MAX_ALLOW_PER_CONNECTION          ( BLE_PKT_BUF_SIZE )
 
 #define   BLE_CONN_BUF_SIZE                 (BLE_MAX_ALLOW_CONNECTION * BLE_MAX_ALLOW_PER_CONNECTION)
 
@@ -110,9 +112,22 @@ llConnState_t               pConnContext[BLE_MAX_ALLOW_CONNECTION];
 /*********************************************************************
     OSAL LARGE HEAP CONFIG
 */
-#define     LARGE_HEAP_SIZE  (10*1024)
-ALIGN4_U8       g_largeHeap[LARGE_HEAP_SIZE];
+#if (MESH_HEAP == 1)
+    #define     LARGE_HEAP_SIZE  (6*1024)
+    ALIGN4_U8   g_largeHeap[LARGE_HEAP_SIZE];
 
+    #define     MESH_HEAP_SIZE    (2*1024)
+    ALIGN4_U8   g_meshHeap[MESH_HEAP_SIZE];
+#else
+    #define     LARGE_HEAP_SIZE  (8*1024)
+    ALIGN4_U8       g_largeHeap[LARGE_HEAP_SIZE];
+#endif
+
+#define     LL_LINKBUF_CFG_NUM                0
+
+#define     LL_PKT_BUFSIZE                    280
+#define     LL_LINK_HEAP_SIZE    ( ( BLE_MAX_ALLOW_CONNECTION * 3 + LL_LINKBUF_CFG_NUM ) * LL_PKT_BUFSIZE )//basic Space + configurable Space
+ALIGN4_U8   g_llLinkHeap[LL_LINK_HEAP_SIZE];
 /*********************************************************************
     GLOBAL VARIABLES
 */
@@ -174,6 +189,13 @@ static void hal_low_power_io_init(void)
 
 static void ble_mem_init_config(void)
 {
+    //ll linkmem setup
+    extern void ll_osalmem_init(osalMemHdr_t* hdr, uint32 size);
+    ll_osalmem_init((osalMemHdr_t*)g_llLinkHeap, LL_LINK_HEAP_SIZE);
+    #if (MESH_HEAP == 1)
+    extern void mesh_osalmem_init(osalMemHdr_t* hdr, uint32 size);
+    mesh_osalmem_init((osalMemHdr_t*)g_meshHeap, MESH_HEAP_SIZE);
+    #endif
     osal_mem_set_heap((osalMemHdr_t*)g_largeHeap, LARGE_HEAP_SIZE);
     LL_InitConnectContext(pConnContext,
                           g_pConnectionBuffer,
@@ -181,6 +203,14 @@ static void ble_mem_init_config(void)
                           BLE_MAX_ALLOW_PKT_PER_EVENT_TX,
                           BLE_MAX_ALLOW_PKT_PER_EVENT_RX,
                           BLE_PKT_VERSION);
+    Host_InitContext(   MAX_NUM_LL_CONN,
+                        glinkDB,glinkCBs,
+                        smPairingParam,
+                        gMTU_Size,
+                        gAuthenLink,
+                        l2capReassembleBuf,l2capSegmentBuf,
+                        gattClientInfo,
+                        gattServerInfo);
     #ifdef  BLE_SUPPORT_CTE_IQ_SAMPLE
     LL_EXT_Init_IQ_pBuff(g_llCteSampleI,g_llCteSampleQ);
     #endif
@@ -196,7 +226,8 @@ static void hal_rfphy_init(void)
     g_rfPhyFreqOffSet   =RF_PHY_FREQ_FOFF_00KHZ;
     //============config xtal 16M cap
     XTAL16M_CAP_SETTING(0x09);
-    XTAL16M_CURRENT_SETTING(0x01);
+    XTAL16M_CURRENT_SETTING(0x03);
+    hal_rc32k_clk_tracking_init();
     hal_rom_boot_init();
     NVIC_SetPriority((IRQn_Type)BB_IRQn,    IRQ_PRIO_REALTIME);
     NVIC_SetPriority((IRQn_Type)TIM1_IRQn,  IRQ_PRIO_HIGH);     //ll_EVT
@@ -215,7 +246,6 @@ static void hal_init(void)
     hal_pwrmgr_init();
     xflash_Ctx_t cfg =
     {
-        .spif_ref_clk   =   SYS_CLK_RC_32M,
         .rd_instr       =   XFRD_FCMD_READ_DUAL
     };
     hal_spif_cache_init(cfg);
@@ -227,15 +257,15 @@ static void hal_init(void)
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 int  main(void)
 {
-    g_system_clk = SYS_CLK_DBL_32M;//SYS_CLK_XTAL_16M;//SYS_CLK_DLL_64M;
+    g_system_clk = SYS_CLK_DLL_48M;
     g_clk32K_config = CLK_32K_RCOSC;//CLK_32K_XTAL;//CLK_32K_XTAL,CLK_32K_RCOSC
     #if(FLASH_PROTECT_FEATURE == 1)
-    hal_flash_lock();
+    hal_flash_enable_lock(MAIN_INIT);
     #endif
     drv_irq_init();
     init_config();
-    extern void ll_patch_master(void);
-    ll_patch_master();
+    extern void ll_patch_mesh(void);
+    ll_patch_mesh();
     hal_rfphy_init();
     hal_init();
     #if(_BUILD_FOR_DTM_==1)

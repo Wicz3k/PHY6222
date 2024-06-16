@@ -90,7 +90,7 @@ void appl_dump_bytes(UCHAR* buffer, UINT16 length);
 void appl_mesh_sample (void);
 
 #define VENDOR_PRODUCT_MAC_ADDR         0x4000
-#define PROCFG_COMPLETE_TIMEOUT         30
+#define PROCFG_COMPLETE_TIMEOUT         20
 
 
 #define UI_FRND_CRITERIA                0x4B
@@ -112,7 +112,7 @@ extern uint32            osal_sys_tick;
 
 uint16  src_uaddr;
 
-EM_timer_handle thandle;
+EM_timer_handle thandle  = EM_TIMER_HANDLE_INIT_VAL ;
 
 
 extern UCHAR blebrr_prov_started;
@@ -1941,8 +1941,15 @@ static API_RESULT UI_prov_callback
 
             if(*phandle == PROV_BRR_GATT)
             {
+                #if(CFG_MESH_FAST_PRO)
+                blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
+                UI_register_proxy();
+                BRR_HANDLE handle = 1;
+                MS_brr_remove_bearer(BRR_TYPE_GATT, &handle);
+                #else
                 MS_ENABLE_PROXY_FEATURE();
                 osal_start_timerEx(bleMesh_TaskID, BLEMESH_GAP_TERMINATE, 3000); //add gap terminate evt by hq
+                #endif
             }
 
             #ifdef EASY_BOUNDING
@@ -2000,6 +2007,7 @@ static void UI_setup_prov(UCHAR role, UCHAR brr)
     if (PROV_BRR_GATT & brr)
     {
         blebrr_gatt_mode_set(BLEBRR_GATT_PROV_MODE);
+        // blebrr_set_gattmode_pl (BLEBRR_GATT_PROV_MODE);
     }
 
     if (PROV_ROLE_PROVISIONER != role)
@@ -2060,6 +2068,7 @@ void UI_proxy_start_adv(MS_SUBNET_HANDLE subnet_handle, UCHAR proxy_adv_mode)
 
     /* Set the role to Proxy with bearer */
     blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
+    // blebrr_set_gattmode_pl (BLEBRR_GATT_PROXY_MODE);
     CONSOLE_OUT("Start Proxy Advertisements with %s for Subnet 0x%04X\n",
                 (proxy_adv_mode == MS_PROXY_NET_ID_ADV_MODE) ? "Network ID" : "Node Identity",
                 subnet_handle);
@@ -2299,7 +2308,7 @@ void vm_subscriptiong_binding_cb (void)
     thandle = EM_TIMER_HANDLE_INIT_VAL;
     UI_sample_binding_app_key();
     MS_DISABLE_RELAY_FEATURE();
-    MS_ENABLE_PROXY_FEATURE();
+    MS_DISABLE_PROXY_FEATURE();
     MS_DISABLE_FRIEND_FEATURE();
     relay = MS_access_cm_get_features_field(&relay, MS_FEATURE_RELAY);
 
@@ -2316,7 +2325,7 @@ void vm_subscriptiong_binding_cb (void)
 
     MS_access_cm_set_transmit_state(MS_RELAY_TX_STATE, (0<<3)|1);
     MS_access_ps_store_disable(MS_FALSE);
-    MS_access_cm_set_transmit_state(MS_NETWORK_TX_STATE, (0<<3)|0);
+    MS_access_cm_set_transmit_state(MS_NETWORK_TX_STATE, (2<<3)|4);
 //    if(UI_prov_brr_handle == PROV_BRR_ADV)
 //    {
 //        EM_start_timer (&thandle, 3, timeout_cb, NULL, 0);
@@ -2430,17 +2439,12 @@ API_RESULT UI_app_config_server_callback (
     case MS_ACCESS_CONFIG_NODE_RESET_OPCODE:
         CONSOLE_OUT("[ST TimeOut CB]\n");
         proxy_state = UI_proxy_state_get();
+        blebrr_scan_pl(FALSE);
         nvs_reset(NVS_BANK_PERSISTENT);
-
-//        MS_access_cm_reset(PROV_ROLE_DEVICE);
 
         if(MS_PROXY_CONNECTED != proxy_state)
         {
-            EM_start_timer (&thandle, 5, timeout_cb, NULL, 0);
-        }
-        else
-        {
-            blebrr_disconnect_pl();
+            EM_start_timer (&thandle, 3, timeout_cb, NULL, 0);
         }
 
         break;
@@ -2529,6 +2533,8 @@ void appl_mesh_sample (void)
     #endif
     /* Initialize utilities */
     nvsto_init(NVS_FLASH_BASE1,NVS_FLASH_BASE2);
+    /* Initialize Mesh config */
+    MS_limit_config();
     /* Initialize Mesh Stack */
     MS_init(config_ptr);
     /* Register with underlying BLE stack */

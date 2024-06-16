@@ -128,6 +128,8 @@ extern uint32_t getMcuPrecisionCount(void);
 
 void hal_rfPhyFreqOff_Set(void);
 void hal_xtal16m_cap_Set(void);
+void hal_rc32k_clk_tracking_init(void);
+
 
 #ifdef __cplusplus
 }

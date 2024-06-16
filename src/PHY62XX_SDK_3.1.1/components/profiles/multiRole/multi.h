@@ -30,12 +30,22 @@ extern "C"
 /** @defgroup Multi_Constants Multi GAPRole Constants
     @{
 */
+#if SBCMC_ENABLE
+#define   MAX_CONNECTION_NUM          8
+#define   MAX_CONNECTION_SLAVE_NUM    0
+#else
 #define   MAX_CONNECTION_NUM          2
 #define   MAX_CONNECTION_SLAVE_NUM    1
+#endif
+
 #define   MAX_CONNECTION_MASTER_NUM   ( (MAX_CONNECTION_NUM >= MAX_CONNECTION_SLAVE_NUM)?\
                                         (MAX_CONNECTION_NUM - MAX_CONNECTION_SLAVE_NUM):0)
 #if( MAX_CONNECTION_NUM < MAX_CONNECTION_SLAVE_NUM )
 #error ("max connection num is less than slave num")
+#endif
+///prevent repeated connections to the same device
+#if ( MAX_CONNECTION_SLAVE_NUM > 0 )
+#define BLE_CONN_LL_DEV_LIST_SIZE       (MAX_CONNECTION_SLAVE_NUM*(6+1+1))
 #endif
 //// Multi-role Event
 #define MULTI_SCHEDULE_EVT              0x0001
@@ -941,6 +951,7 @@ void multiClearAllSlaveList(void);
 uint8 multiDevInConfSlaveList(uint8* addr);
 uint8 multi_devInLinkList(uint8* addr);
 void multiAddSlaveConnList( uint8 addrType,uint8* addr);
+void multiDelSlaveConnList(uint8* addr);
 GAPMultiRoleCentralDev_t* multiGetSlaveConnList(void);
 void multiDelCurrentConnNode(void);
 

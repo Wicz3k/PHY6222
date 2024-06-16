@@ -1,4 +1,4 @@
-/**
+﻿/**
     \file MS_features.h
 
     \brief EtherMind Compilation Switches Configuration File.
@@ -101,6 +101,9 @@
     #endif /* !((defined MS_PROXY_SERVER) || (defined MS_PROXY_CLIENT)) */
 #endif /* MS_PROXY_SUPPORT */
 
+#if (MAX_NUM_LL_CONN == 2)
+    #define MS_PRIVATE_SUPPORT
+#endif
 /*
     MS_FRIEND_SUPPORT
 
@@ -108,7 +111,7 @@
 
     Dependency: None.
 */
-#undef MS_FRIEND_SUPPORT
+#define MS_FRIEND_SUPPORT
 
 /*
     MS_LPN_SUPPORT
@@ -117,7 +120,7 @@
 
     Dependency: None.
 */
-#undef MS_LPN_SUPPORT
+#define MS_LPN_SUPPORT
 
 #ifndef CFG_HEARTBEAT_MODE
     #define CFG_HEARTBEAT_MODE 0
@@ -299,13 +302,6 @@
     A GATT bearer.
 */
 /* #define MS_BEARER_GATT */
-
-/*
-    BLEBRR_LP_SUPPORT
-
-    Enables Low Power Mode interfaces in the bearer.
-*/
-#undef BLEBRR_LP_SUPPORT
 
 
 /* ----------------------------------------------------------------------- */
@@ -544,5 +540,8 @@
 //#define CONFIG_DEBUG
 /* #define CONFIG_DEBUG */
 
+#if (GATT_PVNR == 1)
+    #define BLE_CLIENT_ROLE
+#endif
 #endif /* _H_MS_FEATURES_ */
 

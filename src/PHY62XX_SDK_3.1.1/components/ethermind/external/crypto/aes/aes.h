@@ -16,6 +16,7 @@ typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 
+
 #define AES_BLOCK_SIZE 16
 
 void* aes_encrypt_init(const u8* key, size_t len);

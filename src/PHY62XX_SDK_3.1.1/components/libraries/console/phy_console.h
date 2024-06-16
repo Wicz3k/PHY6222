@@ -35,6 +35,7 @@
 #define _PHY_CONSOLE_H
 
 #include "bus_dev.h"
+#include "uart.h"
 
 #define CONS_CMD_NUM_MAX  32
 #define CONS_CMD_RXBUF_MAX  1024
@@ -50,7 +51,9 @@ typedef struct
     uint16_t cmd_id;
     char*    cmd_name;
 } cons_cmd_t;
-int console_init(const cons_cmd_t* cmdlist, cons_callback_t callback);
+int console_init(UART_INDEX_e port, int boardrate,
+                 gpio_pin_e tx, gpio_pin_e rx,
+                 const cons_cmd_t* cmdlist, cons_callback_t callback);
 
 #endif
 

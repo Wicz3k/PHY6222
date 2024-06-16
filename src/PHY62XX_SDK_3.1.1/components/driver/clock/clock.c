@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -152,8 +152,10 @@ void hal_rtc_clock_config(CLK32K_e clk32Mode)
     }
 
     //ZQ 20200812 for rc32k wakeup
+    #ifndef XOSC_PIN_ALLOW
     subWriteReg(&(AP_AON->PMCTL0),28,28,0x1);//turn on 32kxtal
     subWriteReg(&(AP_AON->PMCTL1),18,17,0x0);// reduce 32kxtl bias current
+    #endif
 }
 
 
@@ -227,6 +229,7 @@ void hal_system_soft_reset(void)
         reset path walkaround dwc
     */
     AP_AON->SLEEP_R[0]=4;
+    AON_CLEAR_XTAL_TRACKING_AND_CALIB;
     AP_PCR->SW_RESET1 = 0;
 
     while(1);
@@ -260,6 +263,34 @@ __ATTR_SECTION_XIP__ void hal_xtal16m_cap_Set(void)
     {
         XTAL16M_CAP_SETTING(0x09);
     }
+}
+
+static void aon_register_init(void)
+{
+    write_reg(0x4000f008, 0x06000c00);
+    write_reg(0x4000f00c, 0);
+    write_reg(0x4000f010, 0x00036000);
+    write_reg(0x4000f014, 0x00268000);
+    write_reg(0x4000f018, 0x01064040);
+    write_reg(0x4000f01c, 0x0001ffab);
+    write_reg(0x4000f020, 0);
+    write_reg(0x4000f024, 0);
+    write_reg(0x4000f02c, 0);
+    write_reg(0x4000f030, 0);
+    write_reg(0x4000f034, 0);
+    write_reg(0x4000f0a0, 0);
+    write_reg(0x4000f0a4, 0);
+    write_reg(0x4000f0a8, 0);
+    write_reg(0x4000f0b8, 0x01);
+}
+
+void hal_rc32k_clk_tracking_init(void)
+{
+    extern uint32 counter_tracking;
+    extern uint32_t  g_counter_traking_avg ;
+    counter_tracking = g_counter_traking_avg = STD_RC32_16_CYCLE_16MHZ_CYCLE;
+    aon_register_init();
+    AON_CLEAR_XTAL_TRACKING_AND_CALIB;
 }
 
 

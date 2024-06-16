@@ -80,6 +80,7 @@ extern uint16 attBuildHandleValueCfm( uint8* pBuf, uint8* pMsg );
 
 extern bStatus_t attSendMsg( uint16 connHandle, attBuildMsg_t pfnBuildMsg,
                              uint8 opcode, uint8* pMsg );
+extern uint8 ATT_Init_StackContent(uint8 max_conn_num,uint16* mtu_size_buf );
 
 /*********************************************************************
 *********************************************************************/

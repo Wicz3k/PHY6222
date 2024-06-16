@@ -118,6 +118,8 @@ typedef enum IRQn
 #include "mcu_phy_bumbee.h"
 #elif ((PHY_MCU_TYPE == MCU_PRIME_A1) ||(PHY_MCU_TYPE == MCU_PRIME_A2))
 #include "mcu_phy_prime.h"
+#else
+#error "undefine mcu type"
 #endif
 
 #endif

@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -90,12 +90,13 @@
 #include "ltrn_extern.h"
 #include "access_extern.h"
 #include "cli_model.h"
+#include "global_config.h"
 
 
 extern void appl_mesh_sample (void);
 extern void appl_dump_bytes(UCHAR* buffer, UINT16 length);
 extern API_RESULT UI_trn_stop_heartbeat_publication(void);
-extern void UI_set_publish_address(UINT16 addr, MS_ACCESS_MODEL_HANDLE model_handle,UINT8 config_mode);
+extern API_RESULT UI_set_publish_address(UINT16 addr, MS_ACCESS_MODEL_HANDLE model_handle,UINT8 config_mode);
 extern API_RESULT UI_set_provision_data(MS_NET_ADDR provision_addr);
 
 
@@ -121,6 +122,8 @@ extern API_RESULT UI_set_provision_data(MS_NET_ADDR provision_addr);
 uint8 g_buttonCounter = 0;
 UINT16 bleMesh_pdu_time;
 uint32_t g_count_timer=5000;
+UINT16 send_loop_cnt = 1000;
+UINT16  send_mtu_size = 256 ;
 uint32_t vendor_set_index=0;
 UINT8   g_remove_node;
 
@@ -139,6 +142,18 @@ extern MS_ACCESS_MODEL_HANDLE   UI_config_client_model_handle;
 
 extern PROV_DATA_S UI_prov_data;
 
+extern uint8 ll_recv_scan_all_cnt;
+
+typedef struct _UI_PROV_BING_S
+{
+    PROV_BRR        brr;
+    PROV_DEVICE_S   pdev;
+    UCHAR           attention;
+    PROV_HANDLE     phandle;
+} UI_PROV_BING_S;
+extern UI_PROV_BING_S ui_prov_list[1];
+
+
 
 
 
@@ -148,6 +163,8 @@ extern PROV_DATA_S UI_prov_data;
 void blebrr_handle_evt_adv_complete (UINT8 enable);
 void blebrr_handle_evt_adv_report (gapDeviceInfoEvent_t* adv);
 void blebrr_handle_evt_scan_complete (UINT8 enable);
+
+extern UINT16 set_loop_event_interval(UINT16 val);
 
 API_RESULT blebrr_handle_le_connection_pl(uint16_t  conn_idx, uint16_t  conn_hndl, uint8_t   peer_addr_type, uint8_t*    peer_addr);
 
@@ -177,9 +194,19 @@ static gapAdvertisingParams_t bleMesh_advparam;
 static UCHAR bleMesh_DiscCancel = FALSE;             //not use???
 
 
-UCHAR cmdstr[64];
+API_RESULT cli_set_mtu_size(UINT32 argc, UCHAR* argv[]);
+API_RESULT cli_set_interval(UINT32 argc, UCHAR* argv[]);
+API_RESULT cli_set_loop_cnt(UINT32 argc, UCHAR* argv[]);
+API_RESULT cli_show_loop_satus(UINT32 argc, UCHAR* argv[]);
+API_RESULT cli_bonding(UINT32 argc, UCHAR* argv[]);
+
+
+
+UCHAR cmdstr[CLI_MAX_ARGS];
 UCHAR cmdlen;
+
 DECL_CONST CLI_COMMAND cli_cmd_list[] =
+
 {
     /* Help */
     { "help", "Help on this CLI Demo Menu", cli_demo_help },
@@ -193,8 +220,15 @@ DECL_CONST CLI_COMMAND cli_cmd_list[] =
     /* OFF */
     { "off", "Send Generic OFF to the Publish address configured", cli_off },
 
+    /*gateway send pkt*/
+    { "segsend", "Send lpn pkt", cli_seg_send },
+
+
+    /*iv index update test*/
+    { "snb", "Send lpn pkt", cli_snb },
+
     /* Seek for Friend */
-    { "seek", "Setup Friendship", cli_seek },
+//    { "seek", "Setup Friendship", cli_seek },
 
 //    /* Scene Store */
 //    { "store", "Scene Store", cli_scene_store },
@@ -225,8 +259,28 @@ DECL_CONST CLI_COMMAND cli_cmd_list[] =
     { "keyrefreshphaseset", "Send Config Key Refresh Phase Set", cli_core_modelc_config_key_refresh_phase_set},
 
     /* Send Config Netkey Update */
-    { "netkeyupdate", "Send Config Netkey Update", cli_core_modelc_config_netkey_update}
+    { "netkeyupdate", "Send Config Netkey Update", cli_core_modelc_config_netkey_update},
+
+    /*Set the loop sending interval: g_count_timer*/
+    { "interval", "Set the loop sending interval", cli_set_interval },
+
+    /*Set the mtu size*/
+    { "setmtu", "Set the mtu size",     cli_set_mtu_size },
+
+    /*set the send_loop_cnt*/
+    { "setcnt", "Set loop cnt times",   cli_set_loop_cnt },
+
+    /*show the current loopback settings*/
+    { "shlbs", "show the current loopback settings",    cli_show_loop_satus },
+
+    /*send boding msg to device*/
+    { "bonding", "sned bonding to unprovision device",    cli_bonding }
+
 };
+
+
+
+
 
 /*********************************************************************
     LOCAL FUNCTIONS
@@ -236,6 +290,9 @@ static void bleMesh_ProcessGAPMsg( gapEventHdr_t* pMsg );
 static void bleMesh_ProcessL2CAPMsg( gapEventHdr_t* pMsg );
 static void bleMesh_ProcessGATTMsg( gattMsgEvent_t* pMsg );
 static void key_press_process(key_evt_t key_evt,uint8 index);
+#ifdef BLE_CLIENT_ROLE
+    bStatus_t BLE_gap_connect_cancel(void);
+#endif
 void bleMesh_uart_init(void);
 
 void UI_set_uuid_octet (UCHAR uuid_0);
@@ -249,9 +306,69 @@ uint32  osal_memory_statics(void);
     PROFILE CALLBACKS
 */
 
-/*********************************************************************
-    PUBLIC FUNCTIONS
-*/
+API_RESULT cli_set_interval(uint32_t argc, uint8_t* argv[])
+{
+    if (1 != argc)
+    {
+        //printf("error No 4-byte parameter is entered \r\n");
+        CLIT_output("[%s,%d]","g_count_timer",-1);
+        return API_FAILURE;
+    }
+
+    g_count_timer = CLI_strtoi(argv[0], CLI_strlen(argv[0]), 10);
+    //printf(" set success ! \n g_count_timer = %d \n " , g_count_timer );
+    CLIT_output("[%s,%d]","g_count_timer",g_count_timer);
+    return API_SUCCESS;
+}
+
+API_RESULT cli_set_mtu_size(uint32_t argc, uint8_t* argv[])
+{
+    if (1 != argc)
+    {
+        //printf("error No 4-byte parameter is entered \r\n");
+        CLIT_output("[%s,%d]","send_mtu_size",-1);
+        return API_FAILURE;
+    }
+
+    send_mtu_size = CLI_strtoi(argv[0], CLI_strlen(argv[0]), 10);
+    //printf(" set success ! \n send_mtu_size = %d \n " , send_mtu_size );
+    CLIT_output("[%s,%d]","send_mtu_size",send_mtu_size);
+    return API_SUCCESS;
+}
+
+
+API_RESULT cli_set_loop_cnt(uint32_t argc, uint8_t* argv[])
+{
+    if (1 != argc)
+    {
+        //printf("error No 4-byte parameter is entered \r\n");
+        CLIT_output("[%s,%d]","send_loop_cnt",-1);
+        return API_FAILURE;
+    }
+
+    send_loop_cnt = CLI_strtoi(argv[0], CLI_strlen(argv[0]), 10);
+    //printf(" set success ! \n send_loop_cnt = %d \n " , send_loop_cnt );
+    CLIT_output("[%s,%d]","send_loop_cnt",send_loop_cnt);
+    return API_SUCCESS;
+}
+
+API_RESULT cli_show_loop_satus(UINT32 argc, UCHAR* argv[])
+{
+    //printf(" get current loop back settings value are as below: \n");
+    //printf(" g_count_timer = %d \n " , g_count_timer );
+    //printf(" send_mtu_size = %d \n " , send_mtu_size );
+    //printf(" send_loop_cnt = %d \n " , send_loop_cnt );
+    CLIT_output("[%d,%d,%d]",g_count_timer,send_mtu_size,send_loop_cnt)
+    return API_SUCCESS;
+}
+
+API_RESULT cli_bonding(UINT32 argc, UCHAR* argv[])
+{
+    API_RESULT retval;
+    retval = MS_prov_bind(PROV_BRR_GATT, &ui_prov_list[0].pdev, 30, &ui_prov_list[0].phandle);
+    printf("Retval - 0x%04X\n", retval);
+    return retval;
+}
 
 /*********************************************************************
     @fn      bleMesh_Init
@@ -275,7 +392,11 @@ void bleMesh_Init( uint8 task_id )
     //HCI_GAPTaskRegister(bleMesh_TaskID);
     ret = GAP_ParamsInit (bleMesh_TaskID, (GAP_PROFILE_PERIPHERAL | GAP_PROFILE_CENTRAL));
     /* printf ("Ret - %02x\r\n", ret); */
+    #ifdef BLE_CLIENT_ROLE
+    ret = GAP_CentDevMgrInit(0x10);
+    #else
     ret = GAP_CentDevMgrInit(0x80);
+    #endif
     /* printf ("Ret - %02x\r\n", ret); */
     ret = GAP_PeriDevMgrInit();
     /* printf ("Ret - %02x\r\n", ret); */
@@ -287,6 +408,11 @@ void bleMesh_Init( uint8 task_id )
     GATTServApp_AddService( GATT_ALL_SERVICES );    // GATT attributes
     DevInfo_AddService();                           // Device Information Service
     GATTServApp_RegisterForMsg(task_id);
+    #ifdef BLE_CLIENT_ROLE
+    /* Register for GATT Client */
+    GATT_InitClient();
+    GATT_RegisterForInd(bleMesh_TaskID);
+    #endif
     bleMesh_uart_init();
     TRNG_INIT();
     // For DLE
@@ -328,13 +454,14 @@ uint16 bleMesh_ProcessEvent( uint8 task_id, uint16 events )
 
     if ( events & SYS_EVENT_MSG )
     {
-        uint8* pMsg;
+        osal_event_hdr_t* pMsg;
+        pMsg =  (osal_event_hdr_t*)osal_msg_receive( bleMesh_TaskID);
 
-        if ( (pMsg = osal_msg_receive( bleMesh_TaskID )) != NULL )
+        if (pMsg != NULL )
         {
-            bleMesh_ProcessOSALMsg( (osal_event_hdr_t*)pMsg );
+            bleMesh_ProcessOSALMsg(pMsg);
             // Release the OSAL message
-            VOID osal_msg_deallocate( pMsg );
+            VOID osal_msg_deallocate((uint8_t*)pMsg);
         }
 
         // return unprocessed events
@@ -347,11 +474,21 @@ uint16 bleMesh_ProcessEvent( uint8 task_id, uint16 events )
         return (events ^ BLEMESH_LIGHT_PRCESS_EVT);
     }
 
+    if (events & BLEMESH_UART_RX_EVT)
+    {
+        if ('\r' == cmdstr[cmdlen - 1] || '\n' == cmdstr[cmdlen - 1])
+        {
+            cmdstr[cmdlen - 1] = '\0';
+            printf("%s", cmdstr);
+            CLI_process_line_manual(cmdstr,cmdlen);
+            cmdlen = 0;
+        }
+
+        return ( events ^ BLEMESH_UART_RX_EVT );
+    }
+
     if ( events & BLEMESH_START_DEVICE_EVT )
     {
-        /* Register for GATT Client */
-        GATT_InitClient();
-        GATT_RegisterForInd(bleMesh_TaskID);
         light_init(led_pins,3);
         light_blink_evt_cfg(bleMesh_TaskID,BLEMESH_LIGHT_PRCESS_EVT);
         LIGHT_ONLY_RED_ON;
@@ -359,23 +496,6 @@ uint16 bleMesh_ProcessEvent( uint8 task_id, uint16 events )
         appl_mesh_sample();
 //          cli_demo_help(0, NULL);
         return ( events ^ BLEMESH_START_DEVICE_EVT );
-    }
-
-    if (events & BLEMESH_UART_RX_EVT)
-    {
-        if ('\r' == cmdstr[cmdlen - 1])
-        {
-            cmdstr[cmdlen - 1] = '\0';
-            printf("%s", cmdstr);
-            CLI_process_line
-            (
-                cmdstr,
-                cmdlen
-            );
-            cmdlen = 0;
-        }
-
-        return ( events ^ BLEMESH_UART_RX_EVT );
     }
 
     if (events & BLEMESH_GAP_SCANENABLED)
@@ -410,17 +530,25 @@ uint16 bleMesh_ProcessEvent( uint8 task_id, uint16 events )
     if (events & BLEMESH_KEY_PRESS_EVT_LOOP)
     {
 //        g_count_timer%=3000;
+        static uint16 cnt_loop_evt = 0 ;
 
 //        g_count_timer+=631;
         if(blebrr_prov_started == MS_FALSE)
         {
             UI_vendor_model_set_raw_addr();
-            UI_vendor_model_set(1,248,bleMesh_pdu_time++);
+            UI_vendor_model_set(1,send_mtu_size,bleMesh_pdu_time++);
         }
 
-        if(raw_data_onoff&0x01)
+        cnt_loop_evt++;
+
+        if(raw_data_onoff&0x01 && ( cnt_loop_evt <= send_loop_cnt ) )
         {
             osal_start_timerEx(bleMesh_TaskID, BLEMESH_KEY_PRESS_EVT_LOOP, g_count_timer);
+        }
+        else
+        {
+            cnt_loop_evt = 0 ;
+            raw_data_onoff = 0 ;
         }
 
         return (events ^ BLEMESH_KEY_PRESS_EVT_LOOP);
@@ -559,6 +687,23 @@ uint16 bleMesh_ProcessEvent( uint8 task_id, uint16 events )
         return (events ^ BLEMESH_CHECK_NODE_EVT);
     }
 
+    #ifdef BLE_CLIENT_ROLE
+
+    if (events & START_DISCOVERY_SERVICE_EVT)
+    {
+        blebrr_discover_service_pl(blebrr_gatt_mode_get());
+        return (events ^ START_DISCOVERY_SERVICE_EVT);
+    }
+
+    if (events & BLEMESH_CONNECT_TIMEOUT)
+    {
+        BLE_gap_connect_cancel();
+        blebrr_prov_started = MS_FALSE;
+        blebrr_scan_enable();
+        return (events ^ BLEMESH_CONNECT_TIMEOUT);
+    }
+
+    #endif
     // Discard unknown events
     return 0;
 }
@@ -637,9 +782,11 @@ static void bleMesh_ProcessOSALMsg( osal_event_hdr_t* pMsg )
         break;
 
     case GATT_MSG_EVENT:
-        bleMesh_ProcessGATTMsg( (gattMsgEvent_t*)pMsg );
         /* Invoke the Mesh Client GATT Msg Handler */
+        #ifdef BLE_CLIENT_ROLE
         mesh_client_process_gattMsg((gattMsgEvent_t*)pMsg, bleMesh_TaskID);
+        #endif
+        bleMesh_ProcessGATTMsg( (gattMsgEvent_t*)pMsg );
         break;
 
     default:
@@ -654,6 +801,12 @@ static void bleMesh_ProcessGATTMsg( gattMsgEvent_t* pMsg )
     {
     case ATT_EXCHANGE_MTU_RSP:
         break;
+
+    case ATT_ERROR_RSP:
+    {
+        blebrr_disconnect_pl();
+    }
+    break;
 
     default:
         break;
@@ -745,7 +898,7 @@ static void bleMesh_ProcessGAPMsg( gapEventHdr_t* pMsg )
 //            printf("\r\nIn GAP_DEVICE_DISCOVERY_EVENT...\r\n");
         if (TRUE == bleMesh_DiscCancel)
         {
-            if (bleGAPUserCanceled != pMsg->hdr.status)
+            if ((bleGAPUserCanceled != pMsg->hdr.status) && (SUCCESS != pMsg->hdr.status))
             {
                 GAP_DeviceDiscoveryCancel(bleMesh_TaskID);
             }
@@ -779,11 +932,15 @@ static void bleMesh_ProcessGAPMsg( gapEventHdr_t* pMsg )
 
     case GAP_LINK_ESTABLISHED_EVENT:
     {
+//        blebrr_scan_enable();
         gapEstLinkReqEvent_t* pPkt = (gapEstLinkReqEvent_t*)pMsg;
         printf("\r\n GAP_LINK_ESTABLISHED_EVENT received! \r\n");
 
         if ( pPkt->hdr.status == SUCCESS )
         {
+            #ifdef BLE_CLIENT_ROLE
+            osal_stop_timerEx(bleMesh_TaskID, BLEMESH_CONNECT_TIMEOUT);
+            #endif
             /* Send Connection Complete to  Ble Bearer PL layer */
             blebrr_handle_le_connection_pl
             (
@@ -792,12 +949,22 @@ static void bleMesh_ProcessGAPMsg( gapEventHdr_t* pMsg )
                 pPkt->devAddrType,
                 pPkt->devAddr
             );
+            #ifdef BLE_CLIENT_ROLE
+            ATT_SetMTUSizeMax( 80 );
+            attExchangeMTUReq_t pReq;
+            pReq.clientRxMTU = 80;
+            uint8 status =GATT_ExchangeMTU( pPkt->connectionHandle,&pReq, bleMesh_TaskID );
+            osal_start_timerEx(bleMesh_TaskID,START_DISCOVERY_SERVICE_EVT,1000);
+            #endif
         }
     }
     break;
 
     case GAP_LINK_TERMINATED_EVENT:
     {
+        #ifdef BLE_CLIENT_ROLE
+        osal_stop_timerEx(bleMesh_TaskID,START_DISCOVERY_SERVICE_EVT);
+        #endif
         gapTerminateLinkEvent_t* pPkt = (gapTerminateLinkEvent_t*)pMsg;
         /* printf("\r\n GAP_LINK_TERMINATED_EVENT received! \r\n"); */
         blebrr_handle_le_disconnection_pl
@@ -841,7 +1008,7 @@ bStatus_t BLE_gap_set_scan_params
     GAP_SetParamValue( TGAP_GEN_DISC_SCAN_WIND, scan_window );
     GAP_SetParamValue( TGAP_GEN_DISC_SCAN_INT, scan_interval );
     GAP_SetParamValue( TGAP_FILTER_ADV_REPORTS, FALSE);
-    GAP_SetParamValue( TGAP_GEN_DISC_SCAN, 5000 );
+    GAP_SetParamValue( TGAP_GEN_DISC_SCAN, 100 );
     GAP_SetParamValue( TGAP_CONN_SCAN_INT,scan_interval );
     GAP_SetParamValue( TGAP_CONN_SCAN_WIND,scan_window);
     //GAP_SetParamValue( TGAP_LIM_DISC_SCAN, 0xFFFF );
@@ -866,21 +1033,18 @@ bStatus_t BLE_gap_set_scan_enable
 
         if (0 == ret)
         {
+            bleMesh_DiscCancel = FALSE;
             osal_set_event (bleMesh_TaskID, BLEMESH_GAP_SCANENABLED);
         }
     }
     else
     {
-        bleMesh_DiscCancel = TRUE;
         ret = GAP_DeviceDiscoveryCancel(bleMesh_TaskID);
-        #if 0
 
-        if (0 == ret)
+        if ((0 == ret) ||(bleIncorrectMode == ret))
         {
             bleMesh_DiscCancel = TRUE;
         }
-
-        #endif
     }
 
     return ret;
@@ -914,7 +1078,7 @@ bStatus_t BLE_gap_set_advscanrsp_data
 {
     return GAP_UpdateAdvertisingData(bleMesh_TaskID, type, adv_datalen, adv_data);
 }
-
+#ifdef BLE_CLIENT_ROLE
 bStatus_t BLE_gap_connect
 (
     uint8_t   whitelist,
@@ -922,15 +1086,29 @@ bStatus_t BLE_gap_connect
     uint8_t   addr_type
 )
 {
+    bStatus_t ret;
     gapEstLinkReq_t params;
     params.taskID = bleMesh_TaskID;
-    params.highDutyCycle = TRUE;
+    params.highDutyCycle = FALSE;
     params.whiteList = whitelist;
     params.addrTypePeer = addr_type;
     VOID osal_memcpy( params.peerAddr, addr, B_ADDR_LEN );
-    return GAP_EstablishLinkReq( &params );
+    ret = GAP_EstablishLinkReq( &params );
+
+    if(ret == SUCCESS)
+    {
+        osal_start_timerEx(bleMesh_TaskID, BLEMESH_CONNECT_TIMEOUT, 30*1000);
+    }
+
+    return ret;
 }
 
+bStatus_t BLE_gap_connect_cancel(void)
+{
+    extern bStatus_t gapCancelLinkReq( uint8 taskID, uint16 connectionHandle );
+    return gapCancelLinkReq(bleMesh_TaskID,GAP_CONNHANDLE_INIT);
+}
+#endif
 bStatus_t BLE_gap_disconnect(uint16_t   conn_handle)
 {
     return GAP_TerminateLinkReq( bleMesh_TaskID, conn_handle, HCI_DISCONNECT_REMOTE_USER_TERM ) ;
@@ -962,9 +1140,18 @@ void BLE_ecdh_yield (void)
 
 static void ProcessUartData(uart_Evt_t* evt)
 {
-    osal_memcpy((cmdstr + cmdlen), evt->data, evt->len);
-    cmdlen += evt->len;
-    osal_set_event( bleMesh_TaskID, BLEMESH_UART_RX_EVT );
+    UCHAR c_len = cmdlen + evt->len;
+
+    if(c_len < sizeof(cmdstr))
+    {
+        osal_memcpy((cmdstr + cmdlen), evt->data, evt->len);
+        cmdlen += evt->len;
+        osal_set_event( bleMesh_TaskID, BLEMESH_UART_RX_EVT );
+    }
+    else
+    {
+        cmdlen = 0;
+    }
 }
 
 void bleMesh_uart_init(void)

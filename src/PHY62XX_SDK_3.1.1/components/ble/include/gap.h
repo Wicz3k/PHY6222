@@ -315,6 +315,21 @@ extern "C"
 #define GAP_APPEARE_HID_BARCODE_SCANNER         0x03C8 //!< HID Barcode Scanner
 /** @} End GAP_APPEARANCE_VALUES */
 
+
+// extended adv set  values
+#define  GAP_ALL_ADV_SET          0xFE
+
+#define  GAP_EXT_ADV_DATA_MAX_FRAG_LENGTH  251
+
+#define  GAP_EXT_ADV_OP_INTERM_FRAG        0x00
+#define  GAP_EXT_ADV_OP_FIRST_FRAG         0x01
+#define  GAP_EXT_ADV_OP_LAST_FRAG          0x02
+#define  GAP_EXT_ADV_OP_COMPLETE_DATA      0x03
+#define  GAP_EXT_ADV_OP_UNCHANGED_DATA     0x04
+
+#define  GAP_EXT_ADV_PREFER_FRAG           0x00
+#define  GAP_EXT_ADV_PREFER_NOFRAG         0x01
+
 /*  -------------------------------------------------------------------
     TYPEDEFS - Initialization and Configuration
 */
@@ -677,6 +692,51 @@ typedef struct
     uint8 attrLen;    //!< Number of bytes in the attribute data
     uint8* pAttrData; //!< pointer to Attribute data
 } gapAdvDataToken_t;
+
+
+typedef struct
+{
+    uint8     advHandle;                                 // range: 0x00 - 0xEF
+    uint8     advertisingSID;                            // range: 0x00 - 0x0F
+
+    uint16    advEventProperties;                        // adv event type
+
+    uint32    priAdvIntMin;                              // 3 octets, minimum primary adv interval
+    uint32    priAdvIntMax;                             // 3 octets, maximum primary adv interval
+
+    uint8     priAdvChnMap;
+
+    uint8     ownAddrType;                               // own device address type of public or random
+
+    uint8     peerAddrType;
+    uint8     peerAddress[B_ADDR_LEN];
+
+    uint8     wlPolicy;                                  // white list policy for Adv
+
+    uint8     primaryAdvPHY;
+    uint8     secondaryAdvPHY;
+
+    uint8     secondaryAdvMaxSkip;                       // the maximum number of advertising events that can be skipped before the AUX_ADV_IND can be sent
+
+    uint8     scanReqNotificationEnable;
+
+    // ===================== advertisement enable info
+    uint16    duration;                                  // unit us, note spec parameter is 10ms unit
+    uint8     maxExtAdvEvents;
+
+    // ================= advertisement context parameters
+    uint8     isPeriodic;                                  // is the adv parameters for periodic adv
+    uint8     active;                                    // extended adv enable or not
+
+    // ===== info return by controller
+    int8        advTxPower;                                // range -127 ~ 127 dBm, set by controller
+
+    // ===== adv/scan rsp data
+    uint16      advDataLen;
+    uint8*       advData;
+    uint16      scanRspLen;
+    uint8*       scanRspData;
+} gapAdvSetParameter_t;
 
 /** @} End BLE_GAP_DEFINES */
 

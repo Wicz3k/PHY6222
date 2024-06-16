@@ -47,6 +47,14 @@
 #include "adc.h"
 #include "adc_demo.h"
 #include "log.h"
+#include "voice.h"
+#include "Voice_Queue.h"
+#include "mcu.h"
+#include "adc_config.h"
+
+
+#if (APP_RUN_MODE == ADC_RUNMODE_INTERRUPT)
+
 /*********************************************************************
     TYPEDEFS
 */
@@ -57,6 +65,9 @@
 #define MAX_SAMPLE_POINT    64
 uint16_t adc_debug[6][MAX_SAMPLE_POINT];
 static uint8_t channel_done_flag = 0;
+
+
+
 
 /*********************************************************************
     EXTERNAL VARIABLES
@@ -69,6 +80,7 @@ static uint8_t channel_done_flag = 0;
 /*********************************************************************
     LOCAL VARIABLES
 */
+
 static uint8 adcDemo_TaskID;   // Task ID for internal task/event processing
 /*
     channel:
@@ -84,15 +96,13 @@ static uint8 adcDemo_TaskID;   // Task ID for internal task/event processing
     then the pair of [P20~P15,P14~P13,P12~P11] will work.
     other adc channel cannot work.
 */
-adc_Cfg_t adc_cfg =
+static adc_Cfg_t adc_cfg =
 {
     .channel = ADC_BIT(ADC_CH3P_P20)|ADC_BIT(ADC_CH2P_P14)|ADC_BIT(ADC_CH3N_P15),
     .is_continue_mode = FALSE,
     .is_differential_mode = 0x00,
-    .is_high_resolution = 0x7f,
+    .is_high_resolution = 0x00,
 };
-
-
 
 
 /*********************************************************************
@@ -100,6 +110,8 @@ adc_Cfg_t adc_cfg =
 */
 static void adc_ProcessOSALMsg( osal_event_hdr_t* pMsg );
 static void adcMeasureTask( void );
+
+// !request temp cache buff
 
 /*********************************************************************
     PROFILE CALLBACKS
@@ -109,11 +121,16 @@ static void adcMeasureTask( void );
     PUBLIC FUNCTIONS
 */
 
+
+
+
 void adc_Init( uint8 task_id )
 {
     adcDemo_TaskID = task_id;
     adcMeasureTask();
 }
+
+
 
 uint16 adc_ProcessEvent( uint8 task_id, uint16 events )
 {
@@ -133,14 +150,6 @@ uint16 adc_ProcessEvent( uint8 task_id, uint16 events )
 
         // return unprocessed events
         return (events ^ SYS_EVENT_MSG);
-    }
-
-    if ( events & 0x20 )
-    {
-        // Perform periodic heart rate task
-        //LOG("20\n");
-        //osal_start_timerEx( adcDemo_TaskID, 0x20, 2000);
-        return (events ^ 0x20);
     }
 
     if ( events & adcMeasureTask_EVT )
@@ -233,23 +242,24 @@ static void adc_evt(adc_Evt_t* pev)
         }
     }
 }
-
 static void adcMeasureTask( void )
 {
     int ret;
-    bool batt_mode = TRUE;
-    uint8_t batt_ch = ADC_CH3P_P20;
+    bool batt_mode = FALSE;
+    uint8_t batt_ch = ADC_CH2P_P14;
     GPIO_Pin_e pin;
+    LOG("adcMeasureTask INTERRUPT\n");
 
-    //LOG("adcMeasureTask\n");
     if(FALSE == batt_mode)
     {
         ret = hal_adc_config_channel(adc_cfg, adc_evt);
     }
     else
     {
-        if((((1 << batt_ch) & adc_cfg.channel) == 0) || (adc_cfg.is_differential_mode != 0x00))
+        if(((((1 << batt_ch) & adc_cfg.channel) == 0)) || (adc_cfg.is_differential_mode != 0x00))
+        {
             return;
+        }
 
         pin = s_pinmap[batt_ch];
         hal_gpio_cfg_analog_io(pin,Bit_DISABLE);
@@ -264,6 +274,10 @@ static void adcMeasureTask( void )
         return;
     }
 
-    hal_adc_start();
+    hal_adc_start(INTERRUPT_MODE);
 }
+
+
+#endif
+
 

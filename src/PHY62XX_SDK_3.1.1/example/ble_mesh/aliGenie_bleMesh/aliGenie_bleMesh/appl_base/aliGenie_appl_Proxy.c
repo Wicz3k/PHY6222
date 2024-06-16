@@ -20,6 +20,7 @@ void UI_proxy_start_adv(MS_SUBNET_HANDLE subnet_handle, UCHAR proxy_adv_mode)
 
     /* Set the role to Proxy with bearer */
     blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
+    // blebrr_set_gattmode_pl (BLEBRR_GATT_PROXY_MODE);
     CONSOLE_OUT("Start Proxy Advertisements with %s for Subnet 0x%04X\n",
                 (proxy_adv_mode == MS_PROXY_NET_ID_ADV_MODE) ? "Network ID" : "Node Identity",
                 subnet_handle);

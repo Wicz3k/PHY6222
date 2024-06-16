@@ -32,8 +32,8 @@ typedef struct _MS_ACCESS_IV_INDEX
 
 
 /* --------------------------------------------- Global Definitions */
-#define NVS_FLASH_BASE1     0x39000
-#define NVS_FLASH_BASE2     0x3a000
+#define NVS_FLASH_BASE1     0x4e000
+#define NVS_FLASH_BASE2     0x4f000
 
 /* --------------------------------------------- External Global Definitions */
 /**
@@ -50,7 +50,7 @@ extern MS_NET_ADDR  ms_start_unicast_addr;
 extern MS_NET_ADDR  ms_stop_unicast_addr;
 
 
-extern UINT8   ms_ps_store_disable_flag;
+//extern UINT8   ms_ps_store_disable_flag;
 extern MS_NET_ADDR ms_provisioner_addr;
 
 extern UINT8        rx_test_ttl;
@@ -103,6 +103,6 @@ void MS_access_ps_store_all_record(void);
 
 API_RESULT MS_access_ps_store_disable(UINT8 enable);
 
-API_RESULT MS_access_ps_crc_check(void);
+API_RESULT MS_access_ps_crc_check(INT16 ret);
 #endif /* _H_ACCESS_EXTERN_ */
 

@@ -84,7 +84,7 @@ extern  uint32_t pclk;
 
     @return      None.
  **************************************************************************************/
-static void hal_master_send_read_cmd(void* pi2c, uint8_t len)
+void hal_master_send_read_cmd(void* pi2c, uint8_t len)
 {
     uint8_t i;
     AP_I2C_TypeDef* pi2cdev = (AP_I2C_TypeDef*)pi2c;

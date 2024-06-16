@@ -49,12 +49,14 @@
 #include "gpio.h"
 #include "version.h"
 
-//#define FLASH_PROTECT_FEATURE
 #define CHIP_MADDR_LEN          6
 #define CHIP_ID_FLASH_ADDRESS           0x11000800
 #define CHIP_MADDR_FLASH_ADDRESS        (CHIP_ID_FLASH_ADDRESS+CHIP_ID_LENGTH*4)
+#define FLASH_PROTECT_AREA      0x7c// protected area: 0x7c -> ALL
 
-
+#ifndef FLASH_PROTECT_CMP_ENABLE
+    #define FLASH_PROTECT_CMP_ENABLE   0
+#endif
 
 #ifndef FLASH_PROTECT_FEATURE
     #define FLASH_PROTECT_FEATURE   0
@@ -82,7 +84,7 @@
 //xip flash read instrcution
 #define XFRD_FCMD_READ          0x0000003
 #define XFRD_FCMD_READ_DUAL     0x801003B
-#define XFRD_FCMD_READ_QUAD     0x801006B
+#define XFRD_FCMD_READ_QUAD     0x802006B
 
 
 #define FCMD_RESET              0x99  //reset
@@ -114,9 +116,10 @@
 
 typedef struct
 {
-    sysclk_t      spif_ref_clk;         //
     uint32_t      rd_instr;
 } xflash_Ctx_t;
+
+extern bool spif_dma_use;
 
 typedef enum
 {
@@ -132,12 +135,27 @@ typedef struct
     uint8_t mAddr[CHIP_MADDR_LEN];
 } chipMAddr_t;
 
+typedef enum
+{
+    SLB_OTA                = 0x1,
+    SINGLE_OTA             = 0x2,
+    MAIN_INIT              = 0x3,
+    FS_INIT                = 0x4,
+    FS_FORMAT              = 0x5,
+    FS_GARBAGE_COLLECT     = 0x6,
+    FS_ITEM_DEL            = 0x7,
+    FS_ITEM_WRITE          = 0x8,
+    PS_STORE               = 0x9,
+    USER_DEFINE_1          = 0xa,
+    USER_DEFINE_2          = 0xb,
+    USER_DEFINE_3          = 0xc,
+    NONE                   = 0xff, //Only used in main initialization !!!
+} module_ID_t;
 typedef struct
 {
-    bool    init_flag;
-    uint32_t IdentificationID;
-    uint32_t Capacity;
-} FLASH_CHIP_INFO;
+    bool    bypass_flash_lock;
+    module_ID_t module_ID;
+} FLASH_PROTECT_INFO;
 
 extern int _spif_wait_nobusy(uint8_t flg, uint32_t tout_ns);
 extern int  spif_write(uint32_t addr, uint8_t* data, uint32_t size);
@@ -152,11 +170,17 @@ extern int spif_write_protect(bool en);
 extern void spif_cmd(uint8_t op, uint8_t addrlen, uint8_t rdlen, uint8_t wrlen, uint8_t mbit, uint8_t dummy);
 extern void spif_rddata(uint8_t* data, uint8_t len);
 extern int spif_config(sysclk_t ref_clk, uint8_t div,  uint32_t rd_instr,  uint8_t mode_bit, uint8_t QE);
+extern int  spif_read_id(uint32_t* pid);
+extern void spif_wrdata(uint8_t* data, uint8_t len);
 int hal_spif_cache_init(xflash_Ctx_t cfg);
 void hal_cache_tag_flush(void);
 #if(FLASH_PROTECT_FEATURE == 1)
+    int hal_flash_enable_lock(module_ID_t id);
+    int hal_flash_disable_lock(module_ID_t id);
+    int hal_flash_write_status_register(uint8_t reg_data);
     int hal_flash_lock(void);
     int hal_flash_unlock(void);
+    uint8_t hal_flash_get_lock_state(void);
 #endif
 int hal_flash_write(uint32_t addr, uint8_t* data, uint32_t size);
 int hal_flash_write_by_dma(uint32_t addr, uint8_t* data, uint32_t size);
@@ -164,12 +188,6 @@ int hal_flash_read(uint32_t addr, uint8_t* data, uint32_t size);
 int hal_flash_erase_sector(unsigned int addr);
 int hal_flash_erase_block64(unsigned int addr);
 int flash_write_word(unsigned int offset, uint32_t  value);
-
-#ifdef FLASH_PROTECT_FEATURE
-    int hal_flash_lock(void);
-    int hal_flash_unlock(void);
-    uint8_t hal_flash_get_lock_state(void);
-#endif
 
 CHIP_ID_STATUS_e chip_id_one_bit_hot_convter(uint8_t* b,uint32_t w);
 

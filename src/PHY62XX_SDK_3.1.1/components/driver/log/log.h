@@ -49,6 +49,8 @@ extern "C" {
 #endif
 
 #include "uart.h"
+void _uart_putc(char* data, uint16_t size);
+
 void dbg_printf(const char* format, ...);
 void dbg_printf_init(void);
 void my_dump_byte(uint8_t* pData, int dlen);

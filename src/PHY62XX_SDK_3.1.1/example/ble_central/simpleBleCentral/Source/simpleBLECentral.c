@@ -57,9 +57,22 @@
 #include "flash.h"
 #include "rflib.h"
 #include "clock.h"
+#include "OSAL_Clock.h"
 /*********************************************************************
     MACROS
 */
+
+
+#define SBC_SBP_TEST_MODE_AUTO_RESET         (1)
+#define SBC_SBP_TEST_MODE_WTNSP_NOTIFY       (2)
+#define SBC_SBP_TEST_MODE_AUTO_DISCONNET     (3)
+
+#define SBC_SBP_TEST_MODE_CFG                SBC_SBP_TEST_MODE_WTNSP_NOTIFY //SBC_SBP_TEST_MODE_WTNSP_NOTIFY
+#define SBC_SET_ERASE_GAPBOND                subWriteReg(&AP_AON->SLEEP_R[3],0,0,1)
+#define SBC_CLR_ERASE_GAPBOND                subWriteReg(&AP_AON->SLEEP_R[3],0,0,0)
+#define SBC_IS_ERASE_GAPBOND                 (AP_AON->SLEEP_R[3] & 0x01)
+
+
 
 // Length of bd addr as a string
 #define B_ADDR_STR_LEN                        15
@@ -105,19 +118,19 @@
 #define DEFAULT_UPDATE_SLAVE_LATENCY          0
 
 // Supervision timeout value (units of 10ms) if automatic parameter update request is enabled
-#define DEFAULT_UPDATE_CONN_TIMEOUT           400
+#define DEFAULT_UPDATE_CONN_TIMEOUT           500
 
 // Default passcode
-#define DEFAULT_PASSCODE                      0//19655
+#define DEFAULT_PASSCODE                      123456//19655
 
 // Default GAP pairing mode
-#define DEFAULT_PAIRING_MODE                  GAPBOND_PAIRING_MODE_NO_PAIRING//GAPBOND_PAIRING_MODE_WAIT_FOR_REQ
+#define DEFAULT_PAIRING_MODE                  GAPBOND_PAIRING_MODE_INITIATE//GAPBOND_PAIRING_MODE_WAIT_FOR_REQ
 
 // Default MITM mode (TRUE to require passcode or OOB when pairing)
 #define DEFAULT_MITM_MODE                     FALSE
 
 // Default bonding mode, TRUE to bond
-#define DEFAULT_BONDING_MODE                  FALSE //TRUE
+#define DEFAULT_BONDING_MODE                  TRUE //TRUE
 
 // Default GAP bonding I/O capabilities
 #define DEFAULT_IO_CAPABILITIES               GAPBOND_IO_CAP_DISPLAY_ONLY
@@ -143,6 +156,17 @@ enum
     BLE_DISC_STATE_IDLE,                // Idle
     BLE_DISC_STATE_SVC,                 // Service discovery
     BLE_DISC_STATE_CHAR                 // Characteristic discovery
+};
+
+// GapBond states
+enum
+{
+    BLE_GapBond_IDLE,                   // Idle
+    BLE_GapBond_Starting,
+    BLE_GapBond_Paring_OK,
+    BLE_GapBond_Paring_FAIL,
+    BLE_GapBond_Bond_OK,
+    BLE_GapBond_Bond_FAIL
 };
 
 // add by zhufei.zhang 2018.10.25
@@ -287,6 +311,11 @@ static uint8 simpleBLEState = BLE_STATE_IDLE;
 // Discovery state
 static uint8 simpleBLEDiscState = BLE_DISC_STATE_IDLE;
 
+//GapBondmgr state
+static uint8 simpleBleGapBondState = BLE_GapBond_IDLE;//
+
+static UTCTime s_linkActiveDuration = 0;
+
 //// Discovered service start and end handle
 //static uint16 simpleBLESvcStartHdl = 0;
 //static uint16 simpleBLESvcEndHdl = 0;
@@ -308,7 +337,7 @@ static gapDevRec_t simpleBlePeerTarget;
 volatile static uint8_t advDataFilterCnt;
 static uint16 connIntv = 30;
 static uint16 connLatency = 4;
-static uint16 connTimeOut = 500;
+static uint16 connTimeOut = 200;
 volatile static uint32 connEventCnt = 0;
 
 static uint16 dleTxOctets=251;
@@ -325,9 +354,9 @@ static uint8 phyModeCtrlSlave=0x01;
 static SimpleGattScanServer             SimpleClientInfo;
 static SimpleClientADV_ScanData     simpleBLEDevList[DEFAULT_MAX_SCAN_RES];
 
-#define RWN_TEST_VAL_LEN            20
+#define RWN_TEST_VAL_LEN            200
 static uint8 rwnTestVal[RWN_TEST_VAL_LEN];
-
+static uint8_t rwnTestCnt=0;
 static uint8 slaCtrlCmd=0;
 
 static uint8 mtu = 247;
@@ -382,10 +411,14 @@ char* bdAddr2Str ( uint8* pAddr );
 
 // add by zhufei.zhang
 static void simpleBLEAnalysisADVDATA(uint8 Index,gapDeviceInfoEvent_t* pData);
-static void simpleBLECentral_CharacteristicTest(void);
+//static void simpleBLECentral_CharacteristicTest(void);
+static void simpleBLECentral_ReadWriteNotifyTest(void);
 static void simpleBLECentral_DiscoverDevice(void);
 static void simpleBLECentral_LinkDevice(void);
 extern uint32 osal_memory_statics(void);
+extern uint8 llPermit_ctrl_procedure(uint16 connId);
+
+static void simpleBLECentral_LinkDevice_Direct(uint8_t p_Type,uint8_t p_addr[]);
 
 /*********************************************************************
     PROFILE CALLBACKS
@@ -435,13 +468,14 @@ void SimpleBLECentral_Init( uint8 task_id )
     // Setup GAP
     GAP_SetParamValue(TGAP_GEN_DISC_SCAN, DEFAULT_SCAN_DURATION);
     GAP_SetParamValue(TGAP_LIM_DISC_SCAN, DEFAULT_SCAN_DURATION);
-    GAP_SetParamValue(TGAP_CONN_EST_INT_MIN, 30); //  * 1.25ms      // 30
-    GAP_SetParamValue(TGAP_CONN_EST_INT_MAX, 40);
+    GAP_SetParamValue(TGAP_CONN_EST_INT_MIN, 20); //  * 1.25ms      // 30
+    GAP_SetParamValue(TGAP_CONN_EST_INT_MAX, 20);
+    GAP_SetParamValue(TGAP_CONN_EST_SUPERV_TIMEOUT, DEFAULT_UPDATE_CONN_TIMEOUT);
     GGS_SetParameter(GGS_DEVICE_NAME_ATT, GAP_DEVICE_NAME_LEN, (uint8*)simpleBLEDeviceName);
     // Setup the GAP Bond Manager
     {
         uint32 passkey = DEFAULT_PASSCODE;
-        uint8 pairMode = GAPBOND_PAIRING_MODE_NO_PAIRING; //GAPBOND_PAIRING_MODE_INITIATE;//DEFAULT_PAIRING_MODE;    // GAPBOND_PAIRING_MODE_NO_PAIRING
+        uint8 pairMode = GAPBOND_PAIRING_MODE_INITIATE; //GAPBOND_PAIRING_MODE_INITIATE;//DEFAULT_PAIRING_MODE;    // GAPBOND_PAIRING_MODE_NO_PAIRING
         uint8 mitm = DEFAULT_MITM_MODE;
         uint8 ioCap = DEFAULT_IO_CAPABILITIES;
         uint8 bonding = DEFAULT_BONDING_MODE;
@@ -463,6 +497,14 @@ void SimpleBLECentral_Init( uint8 task_id )
     GGS_AddService(GATT_ALL_SERVICES);         // GAP
     GATTServApp_AddService(GATT_ALL_SERVICES); // GATT attributes
     LL_PLUS_PerStats_Init(&g_perStatsByChanTest);
+
+    if(SBC_IS_ERASE_GAPBOND)
+    {
+        AT_LOG("ERASE GAPBOND Flag is Set, Erase all gapbond record\n");
+        GAPBondMgr_SetParameter(GAPBOND_ERASE_ALLBONDS,0,NULL);
+        SBC_CLR_ERASE_GAPBOND;
+    }
+
     // Setup a delayed profile startup
     osal_set_event(simpleBLETaskId, START_DEVICE_EVT);
     AT_LOG("[PEER ADDR]");
@@ -533,7 +575,18 @@ uint16 SimpleBLECentral_ProcessEvent(uint8 task_id, uint16 events)
     if (events & CENTRAL_INIT_DONE_EVT)
     {
         LOG("BLE as central Init Done \r\n");
-        simpleBLECentral_DiscoverDevice();
+
+        if(findDevByName==TRUE)
+        {
+            LOG("find by name,so discover now....");
+            simpleBLECentral_DiscoverDevice();
+        }
+        else
+        {
+            LOG("find by mac,so connect now....");
+            simpleBLECentral_LinkDevice_Direct(ADDRTYPE_PUBLIC,simpleBlePeerTarget.addr);
+        }
+
         return (events ^ CENTRAL_INIT_DONE_EVT);
     }
 
@@ -546,14 +599,24 @@ uint16 SimpleBLECentral_ProcessEvent(uint8 task_id, uint16 events)
 
     if (events & START_DISCOVERY_SERVICE_EVT)
     {
-        simpleBLECentralStartDiscoveryService();
+        if(simpleBleGapBondState==BLE_GapBond_Starting)
+        {
+            LOG("SMP State[%d]  Pending SDP\n",simpleBleGapBondState);
+            osal_start_timerEx(simpleBLETaskId,START_DISCOVERY_SERVICE_EVT,1000);
+        }
+        else
+        {
+            simpleBLECentralStartDiscoveryService();
+        }
+
         return (events ^ START_DISCOVERY_SERVICE_EVT);
     }
 
     // add by zhufei.zhang
     if (events & START_CHAR_DATA_TEST)
     {
-        simpleBLECentral_CharacteristicTest();
+        //simpleBLECentral_CharacteristicTest();
+        simpleBLECentral_ReadWriteNotifyTest();
         return (events ^ START_CHAR_DATA_TEST);
     }
 
@@ -583,10 +646,15 @@ uint16 SimpleBLECentral_ProcessEvent(uint8 task_id, uint16 events)
     {
         uint8 chanMap[5] = {0xFF, 0xFF, 0xFF, 0xFF, 0x1F};
 
-        if (simpleBLEConnHandle != GAP_CONNHANDLE_INIT)
+        if (simpleBLEConnHandle != GAP_CONNHANDLE_INIT )
         {
-            HCI_LE_SetHostChanClassificationCmd(chanMap);
-            AT_LOG("CHAN MAP\r\n");
+            if(llPermit_ctrl_procedure(simpleBLEConnHandle))
+            {
+                HCI_LE_SetHostChanClassificationCmd(chanMap);
+                AT_LOG("CHAN MAP\r\n");
+            }
+            else
+                osal_start_timerEx(simpleBLETaskId,UPD_CHAN_MAP_EVENT,500);
         }
 
         return (events ^ UPD_CHAN_MAP_EVENT);
@@ -596,10 +664,15 @@ uint16 SimpleBLECentral_ProcessEvent(uint8 task_id, uint16 events)
     {
         if (simpleBLEConnHandle != GAP_CONNHANDLE_INIT)
         {
-            connIntv = ((connIntv + DEFAULT_UPDATE_MIN_CONN_INTERVAL) % DEFAULT_UPDATE_MAX_CONN_INTERVAL);
-            connLatency = (connTimeOut / (connIntv << 2));
-            AT_LOG("UPD[ %2d %2d %2d %2d]\r\n", connIntv, connIntv, connLatency, connTimeOut);
-            GAPCentralRole_UpdateLink(simpleBLEConnHandle, connIntv, connIntv, connLatency, connTimeOut);
+            if(llPermit_ctrl_procedure(simpleBLEConnHandle))
+            {
+                connIntv = ((connIntv + DEFAULT_UPDATE_MIN_CONN_INTERVAL) % DEFAULT_UPDATE_MAX_CONN_INTERVAL);
+                connLatency = (connTimeOut / (connIntv << 2));
+                AT_LOG("UPD[ %2d %2d %2d %2d]\r\n", connIntv, connIntv, connLatency, connTimeOut);
+                GAPCentralRole_UpdateLink(simpleBLEConnHandle, connIntv, connIntv, connLatency, connTimeOut);
+            }
+            else
+                osal_start_timerEx(simpleBLETaskId,UPD_CONN_PARAM,500);
         }
 
         return (events ^ UPD_CONN_PARAM);
@@ -609,8 +682,13 @@ uint16 SimpleBLECentral_ProcessEvent(uint8 task_id, uint16 events)
     {
         if (simpleBLEConnHandle != GAP_CONNHANDLE_INIT)
         {
-            HCI_LE_SetDataLengthCmd(simpleBLEConnHandle, dleTxOctets, dleTxTime);
-            AT_LOG("DLE[ %2d %2d ]\r\n", dleTxOctets, dleTxTime);
+            if(llPermit_ctrl_procedure(simpleBLEConnHandle))
+            {
+                HCI_LE_SetDataLengthCmd(simpleBLEConnHandle, dleTxOctets, dleTxTime);
+                AT_LOG("DLE[ %2d %2d ]\r\n", dleTxOctets, dleTxTime);
+            }
+            else
+                osal_start_timerEx(simpleBLETaskId,UPD_DATA_LENGTH_EVT,500);
         }
 
         return (events ^ UPD_DATA_LENGTH_EVT);
@@ -620,12 +698,17 @@ uint16 SimpleBLECentral_ProcessEvent(uint8 task_id, uint16 events)
     {
         if (simpleBLEConnHandle != GAP_CONNHANDLE_INIT)
         {
-            uint8 allPhy = 0x00;
-            uint8 txPhy = phyModeCtrl;
-            uint8 rxPhy = phyModeCtrl;
-            uint16 phyOption = 0x00;
-            HCI_LE_SetPhyMode(simpleBLEConnHandle, allPhy, txPhy, rxPhy, phyOption);
-            AT_LOG("PHY[ %2d %2d %2d]\r\n", allPhy, txPhy, rxPhy);
+            if(llPermit_ctrl_procedure(simpleBLEConnHandle))
+            {
+                uint8 allPhy = 0x00;
+                uint8 txPhy = phyModeCtrl;
+                uint8 rxPhy = phyModeCtrl;
+                uint16 phyOption = 0x00;
+                HCI_LE_SetPhyMode(simpleBLEConnHandle, allPhy, txPhy, rxPhy, phyOption);
+                AT_LOG("PHY[ %2d %2d %2d]\r\n", allPhy, txPhy, rxPhy);
+            }
+            else
+                osal_start_timerEx(simpleBLETaskId,UPD_PHY_MODE_EVT,500);
         }
 
         return (events ^ UPD_PHY_MODE_EVT);
@@ -635,28 +718,33 @@ uint16 SimpleBLECentral_ProcessEvent(uint8 task_id, uint16 events)
     {
         if (simpleBLEConnHandle != GAP_CONNHANDLE_INIT)
         {
-            attWriteReq_t* pReq;
-            pReq = osal_mem_alloc(sizeof(attWriteReq_t));
-            pReq->sig = FALSE;
-            pReq->cmd = TRUE;
-            pReq->handle = 0x20;
-            pReq->len = 3;
-            rwnTestVal[0] = 0x03;
-            rwnTestVal[1] = dleTxOctetsSlave;
-            rwnTestVal[2] = 0;
-            osal_memcpy(pReq->value, rwnTestVal, pReq->len);
-            bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
-            osal_mem_free(pReq);
-
-            if (status != SUCCESS)
+            if(llPermit_ctrl_procedure(simpleBLEConnHandle))
             {
-                osal_start_timerEx(simpleBLETaskId, SLA_DATA_LENGTH_EVT, 20);
-                //                AT_LOG("SLA DLE[ %2x ]\r\n",status);
+                attWriteReq_t* pReq;
+                pReq = osal_mem_alloc(sizeof(attWriteReq_t));
+                pReq->sig = FALSE;
+                pReq->cmd = TRUE;
+                pReq->handle = 0x20;
+                pReq->len = 3;
+                rwnTestVal[0] = 0x03;
+                rwnTestVal[1] = dleTxOctetsSlave;
+                rwnTestVal[2] = 0;
+                osal_memcpy(pReq->value, rwnTestVal, pReq->len);
+                bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
+                osal_mem_free(pReq);
+
+                if (status != SUCCESS)
+                {
+                    osal_start_timerEx(simpleBLETaskId, SLA_DATA_LENGTH_EVT, 20);
+                    //                AT_LOG("SLA DLE[ %2x ]\r\n",status);
+                }
+                else
+                {
+                    AT_LOG("SLA DLE[ %2x %2d ]\r\n", status, dleTxOctetsSlave);
+                }
             }
             else
-            {
-                AT_LOG("SLA DLE[ %2x %2d ]\r\n", status, dleTxOctetsSlave);
-            }
+                osal_start_timerEx(simpleBLETaskId,SLA_DATA_LENGTH_EVT,500);
         }
 
         return (events ^ SLA_DATA_LENGTH_EVT);
@@ -666,102 +754,114 @@ uint16 SimpleBLECentral_ProcessEvent(uint8 task_id, uint16 events)
     {
         if (simpleBLEConnHandle != GAP_CONNHANDLE_INIT)
         {
-            if (slaCtrlCmd == SLA_1M || slaCtrlCmd == SLA_2M || slaCtrlCmd == SLA_ANY)
+            if(llPermit_ctrl_procedure(simpleBLEConnHandle))
             {
-                uint8 allPhy = 0x00;
-                uint8 txPhy = phyModeCtrlSlave;
-                uint8 rxPhy = phyModeCtrlSlave;
-                //                uint16 phyOption = 0x00;
-                attWriteReq_t* pReq;
-                pReq = osal_mem_alloc(sizeof(attWriteReq_t));
-                pReq->sig = FALSE;
-                pReq->cmd = TRUE;
-                pReq->handle = 0x20;
-                pReq->len = 4;
-                rwnTestVal[0] = 0x05;
-                rwnTestVal[1] = allPhy;
-                rwnTestVal[2] = txPhy;
-                rwnTestVal[3] = 0;
-                osal_memcpy(pReq->value, rwnTestVal, pReq->len);
-                bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
-                osal_mem_free(pReq);
+                if (slaCtrlCmd == SLA_1M || slaCtrlCmd == SLA_2M || slaCtrlCmd == SLA_ANY)
+                {
+                    uint8 allPhy = 0x00;
+                    uint8 txPhy = phyModeCtrlSlave;
+                    uint8 rxPhy = phyModeCtrlSlave;
+                    //                uint16 phyOption = 0x00;
+                    attWriteReq_t* pReq;
+                    pReq = osal_mem_alloc(sizeof(attWriteReq_t));
+                    pReq->sig = FALSE;
+                    pReq->cmd = TRUE;
+                    pReq->handle = 0x20;
+                    pReq->len = 4;
+                    rwnTestVal[0] = 0x05;
+                    rwnTestVal[1] = allPhy;
+                    rwnTestVal[2] = txPhy;
+                    rwnTestVal[3] = 0;
+                    osal_memcpy(pReq->value, rwnTestVal, pReq->len);
+                    bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
+                    osal_mem_free(pReq);
 
-                if (status != SUCCESS)
-                {
-                    osal_start_timerEx(simpleBLETaskId, SLA_PHY_MODE_EVT, 20);
-                    //                AT_LOG("SLA PHY[ %02x ]\r\n",status);
+                    if (status != SUCCESS)
+                    {
+                        osal_start_timerEx(simpleBLETaskId, SLA_PHY_MODE_EVT, 20);
+                        //                AT_LOG("SLA PHY[ %02x ]\r\n",status);
+                    }
+                    else
+                    {
+                        AT_LOG("SLA PHY[ %02x %2d %2d %2d]\r\n", status, allPhy, txPhy, rxPhy);
+                    }
                 }
-                else
+                else if (slaCtrlCmd == SLA_HCLK16_32KRC ||
+                         slaCtrlCmd == SLA_HCLK16_32KXTAL ||
+                         slaCtrlCmd == SLA_HCLK48_32KRC ||
+                         slaCtrlCmd == SLA_HCLK48_32KXTAL ||
+                         slaCtrlCmd == SLA_HCLK64_32KRC ||
+                         slaCtrlCmd == SLA_HCLK64_32KXTAL)
                 {
-                    AT_LOG("SLA PHY[ %02x %2d %2d %2d]\r\n", status, allPhy, txPhy, rxPhy);
+                    uint8 slaHclk, sla32k;
+                    //slaHclk = (slaCtrlCmd == SLA_HCLK16_32KRC || slaCtrlCmd == SLA_HCLK16_32KXTAL ) ? 0x02:0x03;//16M or 48M
+                    //sla32k  = (slaCtrlCmd == SLA_HCLK16_32KRC || slaCtrlCmd == SLA_HCLK48_32KRC ) ? 0x01:0x00;//RC or xtal
+                    slaHclk = ( slaCtrlCmd == SLA_HCLK16_32KRC || slaCtrlCmd == SLA_HCLK16_32KXTAL) ? SYS_CLK_XTAL_16M :
+                              ((slaCtrlCmd == SLA_HCLK48_32KRC || slaCtrlCmd == SLA_HCLK48_32KXTAL) ? SYS_CLK_DLL_48M : SYS_CLK_DLL_64M); //16M or 48M or 64M
+                    sla32k = (slaCtrlCmd == SLA_HCLK16_32KRC ||
+                              slaCtrlCmd == SLA_HCLK48_32KRC ||
+                              slaCtrlCmd == SLA_HCLK64_32KRC)
+                             ? 0x01
+                             : 0x00; //RC or xtal
+                    attWriteReq_t* pReq;
+                    pReq = osal_mem_alloc(sizeof(attWriteReq_t));
+                    pReq->sig = FALSE;
+                    pReq->cmd = TRUE;
+                    pReq->handle = 0x20;
+                    pReq->len = 3;
+                    rwnTestVal[0] = 0xfc;
+                    rwnTestVal[1] = slaHclk;
+                    rwnTestVal[2] = sla32k;
+                    osal_memcpy(pReq->value, rwnTestVal, pReq->len);
+                    bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
+                    osal_mem_free(pReq);
+
+                    if (status != SUCCESS)
+                    {
+                        osal_start_timerEx(simpleBLETaskId, SLA_PHY_MODE_EVT, 20);
+                        //                AT_LOG("SLA PHY[ %02x ]\r\n",status);
+                    }
+                    else
+                    {
+                        AT_LOG("SLA CLK[ %02x %2d %2d]\r\n", status, sla32k, slaHclk);
+                    }
+                }
+                else if (slaCtrlCmd == SLA_CHECK_PER)
+                {
+                    attWriteReq_t* pReq;
+                    pReq = osal_mem_alloc(sizeof(attWriteReq_t));
+                    pReq->sig = FALSE;
+                    pReq->cmd = TRUE;
+                    pReq->handle = 0x20;
+                    pReq->len = 1;
+                    rwnTestVal[0] = 0xfd;
+                    osal_memcpy(pReq->value, rwnTestVal, pReq->len);
+                    bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
+                    osal_mem_free(pReq);
+
+                    if (status != SUCCESS)
+                    {
+                        osal_start_timerEx(simpleBLETaskId, SLA_PHY_MODE_EVT, 20);
+                        //                AT_LOG("SLA PHY[ %02x ]\r\n",status);
+                    }
+                    else
+                    {
+                        AT_LOG("SLA PER CHECK[ %02x]\r\n", status);
+                    }
                 }
             }
-            else if (slaCtrlCmd == SLA_HCLK16_32KRC ||
-                     slaCtrlCmd == SLA_HCLK16_32KXTAL ||
-                     slaCtrlCmd == SLA_HCLK48_32KRC ||
-                     slaCtrlCmd == SLA_HCLK48_32KXTAL ||
-                     slaCtrlCmd == SLA_HCLK64_32KRC ||
-                     slaCtrlCmd == SLA_HCLK64_32KXTAL)
-            {
-                uint8 slaHclk, sla32k;
-                //slaHclk = (slaCtrlCmd == SLA_HCLK16_32KRC || slaCtrlCmd == SLA_HCLK16_32KXTAL ) ? 0x02:0x03;//16M or 48M
-                //sla32k  = (slaCtrlCmd == SLA_HCLK16_32KRC || slaCtrlCmd == SLA_HCLK48_32KRC ) ? 0x01:0x00;//RC or xtal
-                slaHclk = ( slaCtrlCmd == SLA_HCLK16_32KRC || slaCtrlCmd == SLA_HCLK16_32KXTAL) ? SYS_CLK_XTAL_16M :
-                          ((slaCtrlCmd == SLA_HCLK48_32KRC || slaCtrlCmd == SLA_HCLK48_32KXTAL) ? SYS_CLK_DLL_48M : SYS_CLK_DLL_64M); //16M or 48M or 64M
-                sla32k = (slaCtrlCmd == SLA_HCLK16_32KRC ||
-                          slaCtrlCmd == SLA_HCLK48_32KRC ||
-                          slaCtrlCmd == SLA_HCLK64_32KRC)
-                         ? 0x01
-                         : 0x00; //RC or xtal
-                attWriteReq_t* pReq;
-                pReq = osal_mem_alloc(sizeof(attWriteReq_t));
-                pReq->sig = FALSE;
-                pReq->cmd = TRUE;
-                pReq->handle = 0x20;
-                pReq->len = 3;
-                rwnTestVal[0] = 0xfc;
-                rwnTestVal[1] = slaHclk;
-                rwnTestVal[2] = sla32k;
-                osal_memcpy(pReq->value, rwnTestVal, pReq->len);
-                bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
-                osal_mem_free(pReq);
-
-                if (status != SUCCESS)
-                {
-                    osal_start_timerEx(simpleBLETaskId, SLA_PHY_MODE_EVT, 20);
-                    //                AT_LOG("SLA PHY[ %02x ]\r\n",status);
-                }
-                else
-                {
-                    AT_LOG("SLA CLK[ %02x %2d %2d]\r\n", status, sla32k, slaHclk);
-                }
-            }
-            else if (slaCtrlCmd == SLA_CHECK_PER)
-            {
-                attWriteReq_t* pReq;
-                pReq = osal_mem_alloc(sizeof(attWriteReq_t));
-                pReq->sig = FALSE;
-                pReq->cmd = TRUE;
-                pReq->handle = 0x20;
-                pReq->len = 1;
-                rwnTestVal[0] = 0xfd;
-                osal_memcpy(pReq->value, rwnTestVal, pReq->len);
-                bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
-                osal_mem_free(pReq);
-
-                if (status != SUCCESS)
-                {
-                    osal_start_timerEx(simpleBLETaskId, SLA_PHY_MODE_EVT, 20);
-                    //                AT_LOG("SLA PHY[ %02x ]\r\n",status);
-                }
-                else
-                {
-                    AT_LOG("SLA PER CHECK[ %02x]\r\n", status);
-                }
-            }
+            else
+                osal_start_timerEx(simpleBLETaskId,SLA_PHY_MODE_EVT,500);
         }
 
         return (events ^ SLA_PHY_MODE_EVT);
+    }
+
+    if(events & SBC_DISCOVERY_SERVICE_TO_EVT)
+    {
+        LOG("Sys reset by discovery timeout\n");
+        hal_system_soft_reset();
+        return (events ^ SBC_DISCOVERY_SERVICE_TO_EVT);
     }
 
     // Discard unknown events
@@ -801,6 +901,7 @@ static void simpleBLECentralProcessGATTMsg( gattMsgEvent_t* pMsg )
     {
         // In case a GATT message came after a connection has dropped,
         // ignore the message
+        AT_LOG("[GATT ERR] simpleBLEState= %d msg= %x\n",simpleBLEState,pMsg->method);
         return;
     }
 
@@ -810,7 +911,7 @@ static void simpleBLECentralProcessGATTMsg( gattMsgEvent_t* pMsg )
         return;
     }
 
-//  LOG("simpleBLECentralProcessGATTMsg pMsg->method 0x%02X,pMsg->msg.errorRsp.reqOpcode 0x%02X\r\n",pMsg->method,pMsg->msg.errorRsp.reqOpcode);
+    //AT_LOG("[GATTMsg] [%d] method 0x%02X,reqOpcode 0x%02X\n",pMsg->connHandle,pMsg->method,pMsg->msg.errorRsp.reqOpcode);
     if ( ( pMsg->method == ATT_READ_RSP ) ||
             ( ( pMsg->method == ATT_ERROR_RSP ) &&
               ( pMsg->msg.errorRsp.reqOpcode == ATT_READ_REQ ) ) )
@@ -931,7 +1032,7 @@ static void simpleBLECentralProcessGATTMsg( gattMsgEvent_t* pMsg )
 */
 static void simpleBLECentralRssiCB( uint16 connHandle, int8 rssi )
 {
-    LOG( "RSSI -dB: %d\r\n", (uint8) (-rssi) );
+    LOG( "RSSI -[%02d]dB\r\n", (255-(uint8) (-rssi)) );
 }
 
 /*********************************************************************
@@ -950,7 +1051,8 @@ static void simpleBLECentralEventCB( gapCentralRoleEvent_t* pEvent )
     {
     case GAP_DEVICE_INIT_DONE_EVENT:
     {
-        osal_set_event(simpleBLETaskId,CENTRAL_INIT_DONE_EVT);
+        // osal_set_event(simpleBLETaskId,CENTRAL_INIT_DONE_EVT);
+        osal_start_timerEx(simpleBLETaskId,CENTRAL_INIT_DONE_EVT,1000);
     }
     break;
 
@@ -1039,6 +1141,7 @@ static void simpleBLECentralEventCB( gapCentralRoleEvent_t* pEvent )
             simpleBLEState = BLE_STATE_CONNECTED;
             simpleBLEConnHandle = pEvent->linkCmpl.connectionHandle;
             HCI_PPLUS_ConnEventDoneNoticeCmd(simpleBLETaskId, NULL);
+            s_linkActiveDuration=osal_getClock();
 
             //--------------------------------------------------------------------------------------
             //MTU Size Exchange
@@ -1065,12 +1168,6 @@ static void simpleBLECentralEventCB( gapCentralRoleEvent_t* pEvent )
                 osal_start_timerEx( simpleBLETaskId, UPD_DATA_LENGTH_EVT, 100 );
             }
 
-            if(dleTxOctetsSlave>27)
-            {
-                llInitFeatureSetDLE(TRUE);
-                osal_start_timerEx( simpleBLETaskId, SLA_DATA_LENGTH_EVT, 200 );
-            }
-
             //-------------------------------------------------------------------------------------
             //phy update
             HCI_LE_SetDefaultPhyMode(0,0x03,0x01,0x01);
@@ -1083,17 +1180,11 @@ static void simpleBLECentralEventCB( gapCentralRoleEvent_t* pEvent )
                 osal_start_timerEx( simpleBLETaskId, UPD_PHY_MODE_EVT, 300 );
             }
 
-            if(phyModeCtrlSlave>0)
-            {
-                llInitFeatureSet2MPHY(TRUE);
-                HCI_LE_SetDefaultPhyMode(0,0x00,0x03,0x03);
-                osal_start_timerEx( simpleBLETaskId, SLA_PHY_MODE_EVT, 400 );
-            }
-
             HCI_LE_ReadRemoteUsedFeaturesCmd(simpleBLEConnHandle);
             HCI_ReadRemoteVersionInfoCmd(simpleBLEConnHandle);
             osal_start_timerEx( simpleBLETaskId, START_DISCOVERY_SERVICE_EVT, \
                                 DEFAULT_SVC_DISCOVERY_DELAY );
+            //GAPCentralRole_StartRssi( 0, DEFAULT_RSSI_PERIOD );
         }
         else if(pEvent->gap.hdr.status==LL_STATUS_WARNING_WAITING_LLIRQ)
         {
@@ -1112,6 +1203,11 @@ static void simpleBLECentralEventCB( gapCentralRoleEvent_t* pEvent )
             osal_start_timerEx( simpleBLETaskId, CENTRAL_INIT_DONE_EVT, \
                                 1000 );
         }
+
+        #if(DEBUG_INFO)
+        extern void ll_dbg_show(void);
+        ll_dbg_show();
+        #endif
     }
     break;
 
@@ -1120,14 +1216,24 @@ static void simpleBLECentralEventCB( gapCentralRoleEvent_t* pEvent )
         simpleBLEState = BLE_STATE_IDLE;
         simpleBLEConnHandle = GAP_CONNHANDLE_INIT;
         simpleBLEDiscState = BLE_DISC_STATE_IDLE;
-        AT_LOG("[TVEC] %08x DISC.R[0x%2x]\n",getMcuPrecisionCount(),pEvent->linkTerminate.reason);
+        simpleBleGapBondState = BLE_GapBond_IDLE;
+        s_linkActiveDuration = osal_getClock()-s_linkActiveDuration;
+        AT_LOG("[TVEC] LinkActiveDura %08d sec DISC.R[0x%2x]\n",s_linkActiveDuration,pEvent->linkTerminate.reason);
         check_PerStatsProcess();
         AT_LOG("[PMCNT] rdErr %d rstErr %d trgErr %d\n",g_pmCounters.ll_rfifo_read_err,g_pmCounters.ll_rfifo_rst_err,g_pmCounters.ll_trigger_err);
         // Terminate Link , memset SimpleGattScanServer structure
         osal_memset(&SimpleClientInfo,0,sizeof(SimpleGattScanServer));
         osal_memset(simpleBLEDevList,0,sizeof(SimpleClientADV_ScanData)*DEFAULT_MAX_SCAN_RES);
         osal_start_timerEx( simpleBLETaskId, CENTRAL_INIT_DONE_EVT, \
-                            10*1000 );
+                            1*1000 );
+        osal_stop_timerEx( simpleBLETaskId, START_CHAR_DATA_TEST);
+        osal_stop_timerEx( simpleBLETaskId, SBC_DISCOVERY_SERVICE_TO_EVT);
+        GAPCentralRole_CancelRssi( 0 );
+        rwnTestCnt=0;
+        #if(DEBUG_INFO)
+        extern void ll_dbg_show(void);
+        ll_dbg_show();
+        #endif
     }
     break;
 
@@ -1156,16 +1262,19 @@ static void simpleBLECentralPairStateCB( uint16 connHandle, uint8 state, uint8 s
 
     if ( state == GAPBOND_PAIRING_STATE_STARTED )
     {
+        simpleBleGapBondState = BLE_GapBond_Starting;
         LOG( "Pairing started\n" );
     }
     else if ( state == GAPBOND_PAIRING_STATE_COMPLETE )
     {
         if ( status == SUCCESS )
         {
+            simpleBleGapBondState = BLE_GapBond_Paring_OK;
             LOG( "Pairing success\n" );
         }
         else
         {
+            simpleBleGapBondState = BLE_GapBond_Paring_FAIL;
             LOG( "Pairing fail\n" );
         }
     }
@@ -1173,7 +1282,13 @@ static void simpleBLECentralPairStateCB( uint16 connHandle, uint8 state, uint8 s
     {
         if ( status == SUCCESS )
         {
+            simpleBleGapBondState = BLE_GapBond_Bond_OK;
             LOG( "Bonding success\n" );
+        }
+        else
+        {
+            simpleBleGapBondState = BLE_GapBond_Bond_FAIL;
+            LOG( "Bonding fail\n" );
         }
     }
 }
@@ -1189,23 +1304,9 @@ static void simpleBLECentralPasscodeCB( uint8* deviceAddr, uint16 connectionHand
                                         uint8 uiInputs, uint8 uiOutputs )
 {
     LOG("simpleBLECentralPasscodeCB\r\n");
-    #if (HAL_LCD == TRUE)
     uint32  passcode;
-    uint8   str[7];
-    // Create random passcode
-    LL_Rand( ((uint8*) &passcode), sizeof( uint32 ));
-    passcode %= 1000000;
-
-    // Display passcode to user
-    if ( uiOutputs != 0 )
-    {
-        LCD_WRITE_STRING( "Passcode:",  HAL_LCD_LINE_1 );
-        LCD_WRITE_STRING( (char*) _ltoa(passcode, str, 10),  HAL_LCD_LINE_2 );
-    }
-
-    // Send passcode response
+    passcode=DEFAULT_PASSCODE;
     GAPBondMgr_PasscodeRsp( connectionHandle, SUCCESS, passcode );
-    #endif
 }
 
 /*********************************************************************
@@ -1217,7 +1318,6 @@ static void simpleBLECentralPasscodeCB( uint8* deviceAddr, uint16 connectionHand
 */
 static void simpleBLECentralStartDiscoveryService( void )
 {
-    LOG("==>simpleBLECentralStartDiscoveryService\r\n");
     // add by zhufei.zhang 2018.10.25
     // before start discovery , memset the variable
     osal_memset(&SimpleClientInfo,0,sizeof(SimpleGattScanServer));
@@ -1226,7 +1326,17 @@ static void simpleBLECentralStartDiscoveryService( void )
                                             };
     simpleBLEDiscState = BLE_DISC_STATE_SVC;
     // Discovery simple BLE service
-    GATT_DiscAllPrimaryServices(simpleBLEConnHandle,simpleBLETaskId);
+    uint8_t ret = GATT_DiscAllPrimaryServices(simpleBLEConnHandle,simpleBLETaskId);
+    LOG("==>simpleBLECentralStartDiscoveryService  st %d\n",ret);
+
+    if(ret!=SUCCESS)
+    {
+        uint32 retry_dly = 1000;//ms
+        osal_start_timerEx( simpleBLETaskId, START_DISCOVERY_SERVICE_EVT, retry_dly);
+        LOG("Retry sdp after %d ms\n",retry_dly);
+    }
+
+    //osal_start_timerEx( simpleBLETaskId, SBC_DISCOVERY_SERVICE_TO_EVT,6000 );
 }
 
 /*********************************************************************
@@ -1341,9 +1451,39 @@ static void simpleBLEGATTDiscoveryEvent( gattMsgEvent_t* pMsg )
             }
             else
             {
-                AT_LOG("All Characteristic Discover Success \r\n");
+                AT_LOG("All Characteristic Discover Success Total PrimaryServ %d\r\n",SimpleClientInfo.PrimaryServiceCnt);
                 simpleBLEDiscState = BLE_DISC_STATE_IDLE;
-                //osal_start_timerEx( simpleBLETaskId, START_CHAR_DATA_TEST,100 );
+                #if (SBC_SBP_TEST_MODE_CFG == SBC_SBP_TEST_MODE_AUTO_RESET)
+
+                if(simpleBleGapBondState== BLE_GapBond_Bond_OK)
+                {
+                    SBC_SET_ERASE_GAPBOND;
+                    AT_LOG("Bonding  Success Set Erase Bonds Flag\n");
+                }
+
+                AT_LOG("system softreset....\n");
+                hal_system_soft_reset();
+#elif(SBC_SBP_TEST_MODE_CFG == SBC_SBP_TEST_MODE_AUTO_DISCONNET)
+                AT_LOG("Set SBC_TERMINATED_CONN Evt\n");
+                osal_set_event(simpleBLETaskId,SBC_TERMINATED_CONN);
+                #else
+
+                //after sdp and before  char_data_test ,trigger sla to update dle and phymode
+                if(dleTxOctetsSlave>27)
+                {
+                    llInitFeatureSetDLE(TRUE);
+                    osal_start_timerEx( simpleBLETaskId, SLA_DATA_LENGTH_EVT, 100 );
+                }
+
+                if(phyModeCtrlSlave>0)
+                {
+                    llInitFeatureSet2MPHY(TRUE);
+                    HCI_LE_SetDefaultPhyMode(0,0x00,0x03,0x03);
+                    osal_start_timerEx( simpleBLETaskId, SLA_PHY_MODE_EVT, 300 );
+                }
+
+                osal_start_timerEx( simpleBLETaskId, START_CHAR_DATA_TEST,500 );
+                #endif
             }
         }
     }
@@ -1360,7 +1500,7 @@ static void simpleBLEGATTDiscoveryEvent( gattMsgEvent_t* pMsg )
 
     @return  none
 */
-
+#if 0
 static void simpleBLECentral_CharacteristicTest(void)
 {
     attWriteReq_t* pReq;
@@ -1388,6 +1528,7 @@ static void simpleBLECentral_CharacteristicTest(void)
             {
                 PrimaryServiceCnt++;
                 PrimaryCharacIndex = 0;
+                LOG("Check Next Char Idx %d\n",PrimaryServiceCnt);
                 osal_start_timerEx( simpleBLETaskId, START_CHAR_DATA_TEST,100 );
                 return;
             }
@@ -1492,7 +1633,51 @@ static void simpleBLECentral_CharacteristicTest(void)
         osal_start_timerEx( simpleBLETaskId, START_CHAR_DATA_TEST,100 );
     }
 }
+#endif
+static void simpleBLECentral_ReadWriteNotifyTest(void)
+{
+    attWriteReq_t* pReq;
+    //attReadReq_t *pReqread;
 
+    if(rwnTestCnt==0)
+    {
+        pReq = osal_mem_alloc(sizeof(attWriteReq_t));
+        pReq->sig = 0;
+        pReq->cmd = TRUE;
+        pReq->handle = 0x2c;
+        pReq->len = 2;
+        pReq->value[0] = (unsigned char)(GATT_CLIENT_CFG_NOTIFY);
+        pReq->value[1] = (unsigned char)(GATT_CLIENT_CFG_NOTIFY >> 8);
+        bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
+        osal_mem_free(pReq);
+    }
+    else if(rwnTestCnt==1)
+    {
+        for(int i=0; i<3; i++)
+        {
+            pReq = osal_mem_alloc(sizeof(attWriteReq_t));
+            pReq->sig = 0;
+            pReq->cmd = TRUE;
+            pReq->handle = 0x2f;
+            pReq->len = 180;
+            rwnTestVal[0]=0x01;
+            rwnTestVal[1]+=1;
+            rwnTestVal[2]=0;
+            rwnTestVal[3]=0;
+            rwnTestVal[4]=0x05;
+            osal_memcpy(pReq->value, rwnTestVal, pReq->len );
+            bStatus_t status = GATT_WriteNoRsp(simpleBLEConnHandle, pReq);
+            osal_mem_free(pReq);
+        }
+    }
+
+    if(rwnTestCnt==0)
+    {
+        rwnTestCnt=1;
+    }
+
+    osal_start_timerEx( simpleBLETaskId, START_CHAR_DATA_TEST, 500 );
+}
 /*********************************************************************
     @fn      simpleBLEAddDeviceInfo
 
@@ -1731,6 +1916,22 @@ static void simpleBLECentral_DiscoverDevice(void)
                                                    FALSE/*DEFAULT_DISCOVERY_WHITE_LIST*/ );
     AT_LOG("simpleBLECentral_DiscoverDevice Return Value :%d\n",stu);
 }
+
+static void simpleBLECentral_LinkDevice_Direct(uint8_t p_Type,uint8_t p_addr[])
+{
+    uint8_t    peer_AddrType;
+    uint8_t    peer_addr[B_ADDR_LEN];
+    peer_AddrType=p_Type;
+    osal_memcpy(peer_addr,p_addr,B_ADDR_LEN);
+    AT_LOG("Start EstablishLink Direct!!! \r\n");
+    simpleBLEState = BLE_STATE_CONNECTING;
+    // Note: if the peer addrType is not PUBLIC, the MSB of peerAddr will be adjusted by function gapAddAddrAdj()
+    GAPCentralRole_EstablishLink(   DEFAULT_LINK_HIGH_DUTY_CYCLE,\
+                                    DEFAULT_LINK_WHITE_LIST,\
+                                    peer_AddrType, \
+                                    peer_addr);
+}
+
 static void simpleBLECentral_LinkDevice(void)
 {
     int8 Index=-1;

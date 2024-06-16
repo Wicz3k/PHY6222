@@ -102,7 +102,7 @@ extern "C"
 #define L2CAP_NUM_AUX_CHANNELS           3
 
 // Number of Dynamic channels: one per each protocol supported on each physical connection
-#define L2CAP_NUM_DYNAMIC_CHANNELS       ( L2CAP_NUM_PROTOCOLS * MAX_NUM_LL_CONN )
+#define L2CAP_NUM_DYNAMIC_CHANNELS       ( L2CAP_NUM_PROTOCOLS /* MAX_NUM_LL_CONN */)
 
 // Total number of L2CAP channels: Dynamic channels plus Auxiliary channels
 #define L2CAP_NUM_CHANNELS               ( L2CAP_NUM_DYNAMIC_CHANNELS + L2CAP_NUM_AUX_CHANNELS )

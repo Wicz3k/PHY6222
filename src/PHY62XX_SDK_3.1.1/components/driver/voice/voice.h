@@ -49,6 +49,13 @@ extern "C" {
 
 #include "types.h"
 #include "gpio.h"
+#include "adc.h"
+
+#define VOICE_RECORD_START_EVT                        0x0001
+#define VOICE_RECORD_STOP_EVT                         0x0002
+#define VOICE_OUTQUEUE_EVT                            0X0004
+#define VOICE_ENCODE_EVT                              0X0008
+#define VOICE_VOICE_RECORD_STOP_EVT                   0X0010
 
 #define    MAX_VOICE_SAMPLE_SIZE        512
 #define    MAX_VOICE_SAMPLE_ID          (MAX_VOICE_SAMPLE_SIZE-1)
@@ -102,9 +109,20 @@ extern "C" {
 
 
 
-#ifndef GET_IRQ_STATUS
+
+#if( ADC_MODE == CCOMPARE_MODE )
+#define    GET_IRQ_STATUS         (AP_ADCC->intr_status & 0x0003ffff)
+#define    ENABLE_ADC_COMPARE_INT       AP_ADCC->intr_mask |= 0x0003fc00
+#define    MASK_ADC_COMPARE_INT         AP_ADCC->intr_mask &= 0xfffc03ff
+
+#else
+#define    ENABLE_ADC_COMPARE_INT       AP_ADCC->intr_mask |= 0x0003fc00
+#define    MASK_ADC_COMPARE_INT         AP_ADCC->intr_mask &= 0xfffc03ff
+
 #define    GET_IRQ_STATUS         (AP_ADCC->intr_status & 0x3ff)
 #endif
+
+
 
 #ifndef ENABLE_ADC
 #define    ENABLE_ADC             (AP_PCRM->ANA_CTL |= BIT(3))
@@ -248,7 +266,7 @@ void hal_voice_amute_off(void);
     @return      None.
  **************************************************************************************/
 // Voice interrupt handler
-void __attribute__((weak)) hal_ADC_IRQHandler(void);
+void __attribute__((weak)) hal_ADC_VOICE_IRQHandler(void);
 
 /**************************************************************************************
     @fn          hal_voice_init
@@ -282,6 +300,8 @@ int hal_voice_stop(void);
 
 // Clear memory and power manager for voice
 int hal_voice_clear(void);
+
+int hal_voice_deinit( void );
 
 #ifdef __cplusplus
 }

@@ -69,6 +69,7 @@ static mesh_prov_cb*    prov_cb;
 
 /* Mesh Proxy Service Related Callbacks */
 static mesh_proxy_cb*   proxy_cb;
+extern uint16 nextHandle ;
 
 /*********************************************************************
     Profile Attributes - variables
@@ -111,6 +112,7 @@ static uint8 mesh_proxy_data_out_val[20];
 
 /* Mesh Proxy Data OUT CCCD value array */
 static gattCharCfg_t mesh_proxy_data_out_cccd[GATT_MAX_NUM_CONN];
+
 
 /*********************************************************************
     Profile Attributes - Table
@@ -240,6 +242,7 @@ static bStatus_t mesh_proxy_write_cb
     uint16 offset
 );
 
+
 static void mesh_prov_handle_conn
 (
     uint16 connHandle,
@@ -251,6 +254,7 @@ static void mesh_proxy_handle_conn
     uint16 connHandle,
     uint8 changeType
 );
+
 
 /*********************************************************************
     PROFILE CALLBACKS
@@ -295,6 +299,10 @@ bStatus_t mesh_prov_init(mesh_prov_cb* cb)
     );
     /* Register with Link DB to receive link status change callback */
     VOID linkDB_Register(mesh_prov_handle_conn);
+
+    if(GATT_SERVICE_HANDLE(mesh_prov_attr_tbl) != 0x0000)
+        nextHandle = GATT_SERVICE_HANDLE(mesh_prov_attr_tbl);
+
     /* Register GATT attribute list and CBs with GATT Server App */
     status = GATTServApp_RegisterService
              (
@@ -302,6 +310,7 @@ bStatus_t mesh_prov_init(mesh_prov_cb* cb)
                  GATT_NUM_ATTRS(mesh_prov_attr_tbl),
                  &mesh_prov_internal_cbs
              );
+//  printf("prov handle %d,nextHandle %d,status %d\n",GATT_SERVICE_HANDLE(mesh_prov_attr_tbl),nextHandle,status);
     /* Save the Callback Provided */
     prov_cb = cb;
     return (status);
@@ -330,6 +339,10 @@ bStatus_t mesh_proxy_init(mesh_proxy_cb* cb)
     );
     /* Register with Link DB to receive link status change callback */
     VOID linkDB_Register(mesh_proxy_handle_conn);
+
+    if(GATT_SERVICE_HANDLE(mesh_proxy_attr_tbl) != 0x0000)
+        nextHandle = GATT_SERVICE_HANDLE(mesh_proxy_attr_tbl);
+
     /* Register GATT attribute list and CBs with GATT Server App */
     status = GATTServApp_RegisterService
              (
@@ -337,6 +350,7 @@ bStatus_t mesh_proxy_init(mesh_proxy_cb* cb)
                  GATT_NUM_ATTRS(mesh_proxy_attr_tbl),
                  &mesh_proxy_internal_cbs
              );
+//  printf("proxy handle %d,nextHandle %d,status %d\n",GATT_SERVICE_HANDLE(mesh_proxy_attr_tbl),nextHandle,status);
     /* Save the Callback Provided */
     proxy_cb = cb;
     return (status);
@@ -768,5 +782,6 @@ static void mesh_proxy_handle_conn( uint16 connHandle, uint8 changeType )
         }
     }
 }
+
 
 

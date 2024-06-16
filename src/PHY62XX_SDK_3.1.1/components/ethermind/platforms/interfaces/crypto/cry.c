@@ -1,4 +1,4 @@
-﻿
+
 /**
     \file cry.c
 
@@ -19,7 +19,9 @@
 #include "crypto.h"
 
 /* Third Party Crypto Includes TODO: Temporary */
-#include "aes.h"
+#if   defined ( __CC_ARM )
+    #include "aes.h"
+#endif
 #include "P256-cortex-ecdh.h"
 #include "rf_phy_driver.h"
 /* --------------------------------------------- Global Defines */

@@ -42,7 +42,7 @@ LR_ROM_XIP  0x11020000 0x030000 {
    simpleblecentral.o(+RO)
    central.o(+RO)
    ;observer.o(+RO)
-   *.o(_section_xip_code_)
+   *.o(_section_xip_code_, _func_xip_code_.*)
   }
  }  
 

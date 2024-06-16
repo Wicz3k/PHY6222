@@ -33,14 +33,18 @@
 /*********************************************************************
     INCLUDES
 */
-#include "cliface.h"
+
 #include "cli_model.h"
 #include "vendormodel_server.h"
 #include "ltrn_extern.h"
+#include "cliface.h"
+#include "access_internal.h"
 
 #define CONSOLE_OUT(...)    printf(__VA_ARGS__)
 #define CONSOLE_IN(...)     scanf(__VA_ARGS__)
 
+extern CLI_COMMAND* g_cli_cmd_list;
+extern uint8_t g_cli_cmd_len;
 
 /*********************************************************************
     EXTERNAL VARIABLES
@@ -89,7 +93,7 @@ static API_RESULT cli_vendormodel_send_reliable_pdu(
 {
     API_RESULT retval;
     /* TODO: Check what should be maximum length */
-    UCHAR      buffer[256];
+    UCHAR      buffer[384];
     UCHAR*     pdu_ptr;
     UINT16     marker;
     retval = API_FAILURE;
@@ -199,6 +203,31 @@ API_RESULT cli_get_information(UINT32 argc, UCHAR* argv[])
     return API_SUCCESS;
 }
 
+API_RESULT cli_mesh_stack_clear(UINT32 argc, UCHAR* argv[])
+{
+    MS_IGNORE_UNUSED_PARAM(argc);
+    MS_IGNORE_UNUSED_PARAM(argv);
+    printf("cli mesh stack clear\n");
+    #if(BLEMESH_ROLE == PROV_ROLE_PROVISIONER)
+    MS_access_cm_reset(PROV_ROLE_PROVISIONER);
+    #else
+    UCHAR proxy_state;
+    MS_proxy_fetch_state(&proxy_state);
+    MS_access_cm_reset(PROV_ROLE_DEVICE);
+    blebrr_scan_pl(FALSE);
+
+    if(MS_PROXY_CONNECTED != proxy_state)
+    {
+        EM_start_timer (&thandle, 3, timeout_cb, NULL, 0);
+    }
+    else
+    {
+        blebrr_disconnect_pl();
+    }
+
+    #endif
+    return API_SUCCESS;
+}
 #if(BLEMESH_ROLE == PROV_ROLE_PROVISIONER)
 #else
 API_RESULT cli_disp_key(UINT32 argc, UCHAR* argv[])
@@ -210,6 +239,59 @@ API_RESULT cli_disp_key(UINT32 argc, UCHAR* argv[])
     UI_sample_check_app_key();
     return API_SUCCESS;
 }
+
+API_RESULT cli_send_pdu(UINT32 argc, UCHAR* argv[])
+{
+    UINT16  destnation_address;
+    UINT16   data_len,appKeyIndex;
+    UINT8   buffer[384];
+
+    if( argc < 3 )
+    {
+        printf("Invaild RAW DATA Paraments\n");
+        return API_FAILURE;
+    }
+
+    destnation_address = CLI_strtoi(argv[0], CLI_strlen(argv[0]), 16);
+    appKeyIndex = CLI_strtoi(argv[1], CLI_strlen(argv[1]), 16);
+    data_len = CLI_strtoi(argv[2], CLI_strlen(argv[2]), 16);
+
+    if((data_len == 0) || data_len >384)
+    {
+        printf("RAW DATA INVALID,Return\n");
+        return API_FAILURE;
+    }
+
+    for(int i=0; i<data_len; i++)
+    {
+        buffer[i] = i;
+    }
+
+    printf("-before-\n");
+    #if (MESH_HEAP == 1)
+    extern uint32  mesh_osal_memory_statics(void);
+    mesh_osal_memory_statics();
+    #else
+    extern uint32  osal_memory_statics(void);
+    osal_memory_statics();
+    #endif
+    cli_vendormodel_send_reliable_pdu(
+        MS_ACCESS_VENDORMODEL_WRITECMD_OPCODE,
+        destnation_address,
+        appKeyIndex,
+        buffer,
+        data_len
+    );
+    printf("-after-\n");
+    #if (MESH_HEAP == 1)
+    mesh_osal_memory_statics();
+    #else
+    osal_memory_statics();
+    #endif
+    printf("DST 0x%04X data_len 0x%02X\n",destnation_address,data_len);
+    return API_SUCCESS;
+}
+
 #endif
 
 static void ll_dumpConnectionInfo(void )
@@ -259,7 +341,14 @@ API_RESULT cli_demo_reset(UINT32 argc, UCHAR* argv[])
 
     #if(BLEMESH_ROLE == PROV_ROLE_PROVISIONER)
     MS_access_cm_reset(PROV_ROLE_PROVISIONER);
+    extern MS_PROV_DEV_ENTRY g_prov_dev_list[MS_MAX_DEV_KEYS];
+
+    for(int i=0; i<MS_MAX_DEV_KEYS; i++)
+        EM_mem_set(&g_prov_dev_list[i],0,sizeof(MS_PROV_DEV_ENTRY));
+
+    ms_access_ps_store(MS_PS_RECORD_DEV_KEYS);
     #else
+    blebrr_scan_pl(FALSE);
     nvs_reset(NVS_BANK_PERSISTENT);
     MS_access_cm_reset(PROV_ROLE_DEVICE);
 
@@ -269,9 +358,11 @@ API_RESULT cli_demo_reset(UINT32 argc, UCHAR* argv[])
     }
 
     #endif
-    printf ("Done\r\n");
+    //printf ("Done\r\n");
+    CLIT_output("[%s,%d]","reset",API_SUCCESS);
     return API_SUCCESS;
 }
+
 
 
 
@@ -339,13 +430,6 @@ API_RESULT cli_on(UINT32 argc, UCHAR* argv[])
 API_RESULT cli_off(UINT32 argc, UCHAR* argv[])
 {
 //    UI_generic_onoff_set(0x00);
-    return API_SUCCESS;
-}
-
-
-API_RESULT cli_seek(UINT32 argc, UCHAR* argv[])
-{
-//    UI_lpn_seek_friend();
     return API_SUCCESS;
 }
 
@@ -429,8 +513,7 @@ API_RESULT cli_core_modelc_config_netkey_update(UINT32 argc, UCHAR* argv[])
     API_RESULT retval;
     int  choice;
     ACCESS_CONFIG_NETKEY_UPDATE_PARAM  param;
-    printf
-    (">> Send Config Netkey Update\n");
+    printf(">> Send Config Netkey Update\n");
 
     if (2 == argc)
     {
@@ -459,30 +542,125 @@ API_RESULT cli_core_modelc_config_netkey_update(UINT32 argc, UCHAR* argv[])
         &param.netkey[0] /* net_key */
     );
     retval = MS_config_client_netkey_update(&param);
-    printf
-    ("retval = 0x%04X\n", retval);
+    printf("retval = 0x%04X\n", retval);
     return retval;
 }
 
-API_RESULT cli_demo_help(UINT32 argc, UCHAR* argv[])
-{
-    UINT32 index;
-    MS_IGNORE_UNUSED_PARAM(argc);
-    MS_IGNORE_UNUSED_PARAM(argv);
-    printf("\r\nCLI Demo\r\n");
 
-    /* Print all the available commands */
-    for (index = 0; index < g_cli_cmd_len; index++)
+API_RESULT cli_snb(UINT32 argc, UCHAR* argv[])
+{
+    extern NET_SEQ_NUMBER_STATE net_seq_number_state;
+    printf ("Set sequnce number\r\n");
+    UINT8 auto_flag, ivindex, ivflag;
+    auto_flag = CLI_strtoi(argv[0], CLI_strlen(argv[0]), 16);
+    ivindex = CLI_strtoi(argv[1], CLI_strlen(argv[1]), 10);
+    ivflag = CLI_strtoi(argv[2], CLI_strlen(argv[2]), 16);
+
+    if(auto_flag == 0)
     {
-        printf("    %s: %s\n",
-               g_cli_cmd_list[index].cmd,
-               g_cli_cmd_list[index].desc);
+        net_seq_number_state.seq_num = 0xEFFFF0;
+        net_seq_number_state.block_seq_num_max = 0xEFFFF0;
+    }
+    else if(auto_flag == 1)
+    {
+        ms_iv_index.iv_index = ivindex;
+
+        if(ivflag == 0x00)
+        {
+            ms_iv_index.iv_update_state &= ivflag;
+        }
+        else
+        {
+            ms_iv_index.iv_update_state |= ivflag;
+        }
+    }
+    else if(auto_flag == 2)
+    {
+        if(ivindex == 0)
+        {
+            MS_DISABLE_SNB_FEATURE();
+            MS_net_stop_snb_timer(0);
+        }
+        else
+        {
+            MS_ENABLE_SNB_FEATURE();
+            MS_net_start_snb_timer(0);
+        }
     }
 
+    MS_access_ps_store_all_record();
+    printf ("Done\r\n");
     return API_SUCCESS;
 }
 
+MS_NET_HEADER    g_hdr;
+UCHAR            g_hdr_flag = MS_FALSE;
+API_RESULT cli_seg_send(UINT32 argc, UCHAR* argv[])
+{
+    UINT16           dst_addr;
+    UCHAR            mode;
+    API_RESULT       retval;
+    UINT16           len;
+    UCHAR*             trans_pdu;
+    /* Un-Segmented Data of 5 Bytes */
+    DECL_CONST UCHAR unseg_trans_pdu[] = { 0x01, 0x02, 0x03, 0x04, 0x05 };
+    /* Segmented Data of 15 Bytes */
+    DECL_CONST UCHAR seg_trans_pdu[]   = { 0x01, 0x02, 0x03, 0x04, 0x05,
+                                           0x06, 0x07, 0x08, 0x09, 0x0A,
+                                           0x0B, 0x0C, 0x0D, 0x0E, 0x0F
+                                         };
 
+    if (2 != argc)
+    {
+        printf("Usage: send <destination addr> <Flag[0: Unsegmented, 1: Segmented]>\n");
+        return API_FAILURE;
+    }
+
+    dst_addr = (UINT16)CLI_strtoi(argv[0], (UINT8)CLI_strlen(argv[0]), 16);
+    mode     = (UCHAR) CLI_strtoi(argv[1], (UINT8)CLI_strlen(argv[1]), 16);
+
+    if (MS_FALSE == g_hdr_flag)
+    {
+        /* Initialize */
+        EM_mem_set(&g_hdr, 0x0, sizeof(g_hdr));
+        MS_access_cm_get_primary_unicast_address(&g_hdr.saddr);
+        g_hdr.daddr = dst_addr;
+        g_hdr.ttl   = 0x01;
+        g_hdr.ctl   = 0x00;
+    }
+
+    /* Update Sequence Number irrespective of g_hdr_flag */
+    MS_net_alloc_seq_num(&g_hdr.seq_num);
+
+    /* Set PDU */
+    if (0 == mode)
+    {
+        trans_pdu = (UCHAR*)unseg_trans_pdu;
+        len       = sizeof(unseg_trans_pdu);
+    }
+    else
+    {
+        trans_pdu = (UCHAR*)seg_trans_pdu;
+        len       = sizeof(seg_trans_pdu);
+    }
+
+    retval = MS_access_send_pdu(g_hdr.saddr, dst_addr, 0x0000, 0x0000, 2,0x00E20405,trans_pdu, len, 0);
+    printf("retval:%x",retval)
+    return retval;
+}
+
+
+/*********************************************************************
+    PUBLIC FUNCTIONS
+*/
+
+API_RESULT cli_demo_help(UINT32 argc, UCHAR* argv[])
+{
+    MS_IGNORE_UNUSED_PARAM(argc);
+    MS_IGNORE_UNUSED_PARAM(argv);
+    CLI_help(g_cli_cmd_list, g_cli_cmd_len);
+    return API_SUCCESS;
+}
 
 
 /*********************************************************************

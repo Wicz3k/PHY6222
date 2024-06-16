@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -512,6 +512,34 @@ static void UI_model_states_initialization(void)
 {
     /* Vendor Defined States */
     UI_vendor_defined_model_states_initialization();
+}
+
+API_RESULT UI_get_net_key(void )
+{
+    UINT8   index=0;
+    UINT8   key[16];
+    API_RESULT retval;
+    CONSOLE_OUT("Fetching Net Key for indx 0x0000\n");
+    retval = MS_access_cm_get_netkey_at_offset
+             (
+                 index,
+                 0,
+                 key
+             );
+
+    /* Check Retval. Print Net Key */
+    if (API_SUCCESS == retval)
+    {
+        CONSOLE_OUT("Network Key[0x%02X]: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+                    index, key[0], key[1], key[2], key[3], key[4], key[5], key[6], key[7],
+                    key[8], key[9], key[10], key[11], key[12], key[13], key[14], key[15]);
+    }
+    else
+    {
+        CONSOLE_OUT("FAILED. Reason: 0x%04X\n", retval);
+    }
+
+    return API_SUCCESS;
 }
 
 

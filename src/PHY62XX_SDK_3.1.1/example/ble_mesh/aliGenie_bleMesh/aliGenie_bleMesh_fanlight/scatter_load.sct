@@ -102,15 +102,16 @@ gattservapp.o(+RO)
 	aes.o(+RO)
 	donglekey.o(+RO)
 	sha256.o(+RO)
-	ms_common_pl.o(+RO)
+	;ms_common_pl.o(+RO)
 	prov_pl.o(+RO)
 	printfa.o(+RO)
 	ali_genie_profile.o(+RO)
 	;appl_prov.o(+RO)
 	aliGenie_led_light*.o (+RO)
+	access_ps.o(+RO)
 
 	gpio.o(+RO)
-	*.o(_section_xip_code_)
+   *.o(_section_xip_code_, _func_xip_code_.*)
 	
 }
  }  

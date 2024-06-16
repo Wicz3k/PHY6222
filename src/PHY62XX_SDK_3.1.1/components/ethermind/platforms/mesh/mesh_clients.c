@@ -1,4 +1,4 @@
-
+﻿
 /**
     \file mesh_clients.c
 
@@ -143,7 +143,7 @@ API_RESULT mesh_client_discover_services
         svc_uuid[0] = (uint8_t)(UUID_MESH_PROXY_SERVICE);
         svc_uuid[1] = (uint8_t)(UUID_MESH_PROXY_SERVICE >> 8);
         /* EM_mem_copy(svc_uuid, MESH_PROXY_SERVICE_UUID128, 16); */
-        mesh_client_curr_dis_uuid = UUID_MESH_PROVISIONING_SERVICE;
+        mesh_client_curr_dis_uuid = UUID_MESH_PROXY_SERVICE;
     }
 
     /* Discover service by UUID */
@@ -436,6 +436,7 @@ void mesh_client_process_gattMsg
     {
         if (bleProcedureComplete == pMsg->hdr.status)
         {
+            blebrr_confige_ntf_pl(1,blebrr_gatt_mode_get());
             /**
                 TODO: Provide Discovery completion Callback.
             */

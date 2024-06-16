@@ -26,6 +26,8 @@
 /* time server application entry point */
 void main_time_server_operations(/* IN */ UINT8 have_menu);
 
+API_RESULT appl_time_server_init(MS_ACCESS_ELEMENT_HANDLE ehdl);
+
 /* Get Model Handle */
 void appl_time_server_get_model_handle(void);
 

@@ -67,7 +67,6 @@ extern UCHAR blebrr_state;
 #define BLEBRR_SET_STATE(x)                 blebrr_state = (x)
 #define BLEBRR_GET_STATE()                  blebrr_state
 
-//#define BLEBRR_LP_SUPPORT
 
 #ifdef BLEBRR_LP_SUPPORT
     #define BLEBRR_LP_OFF                           1
@@ -107,6 +106,7 @@ void blebrr_set_gattmode_pl (UCHAR flag);
 void blebrr_pl_scan_setup (UCHAR enable);
 void blebrr_pl_advertise_setup (UCHAR enable);
 void blebrr_pl_recv_advpacket(UCHAR type, UCHAR* pdata, UINT16 pdatalen, UCHAR rssi);
+void blebrr_pl_recv_service_packet (UCHAR type, UCHAR* pdata, UINT16 pdatalen, UCHAR rssi);
 
 API_RESULT blebrr_gatt_send_pl(BRR_HANDLE* handle, UCHAR* data, UINT16 datalen);
 API_RESULT blebrr_pl_gatt_connection (BRR_HANDLE* handle, UCHAR role, UCHAR mode, UINT16 mtu);

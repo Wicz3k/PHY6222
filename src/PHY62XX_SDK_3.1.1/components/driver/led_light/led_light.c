@@ -36,7 +36,7 @@
 #include "error.h"
 
 static uint16_t s_light[3];
-static light_blink_cfg_t s_lightBlink;
+light_blink_cfg_t s_lightBlink;
 
 static pwm_ch_t pwm_ch[3];
 static gpio_pin_e* led_pin_ptr = NULL;

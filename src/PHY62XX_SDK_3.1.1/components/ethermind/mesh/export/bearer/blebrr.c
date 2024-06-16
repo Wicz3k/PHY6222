@@ -166,7 +166,7 @@ typedef struct _BLEBRR_GAP_ADV_DATA
 
 /* --------------------------------------------- Global Variables */
 #ifdef BLEBRR_LP_SUPPORT
-    EM_timer_handle blebrr_lp_thandle;
+    EM_timer_handle blebrr_lp_thandle ;
 
 #endif
 #ifdef BLEBRR_FILTER_DUPLICATE_PACKETS
@@ -175,6 +175,9 @@ typedef struct _BLEBRR_GAP_ADV_DATA
 #endif /* BLEBRR_FILTER_DUPLICATE_PACKETS */
 
 BRR_BEARER_INFO blebrr_adv;  //HZF
+#ifdef BLE_CLIENT_ROLE
+    BRR_BEARER_SERVICE_INFO blebrr_service_info;  //HZF
+#endif
 
 DECL_STATIC BRR_HANDLE blebrr_advhandle;
 
@@ -187,7 +190,7 @@ DECL_STATIC BLEBRR_Q_ELEMENT blebrr_bcon[BRR_BCON_COUNT];
 DECL_STATIC BLEBRR_Q blebrr_queue;
 
 MS_DEFINE_MUTEX_TYPE(static, blebrr_mutex)
-DECL_STATIC EM_timer_handle blebrr_timer_handle = EM_TIMER_HANDLE_INIT_VAL;
+EM_timer_handle blebrr_timer_handle = EM_TIMER_HANDLE_INIT_VAL;
 UCHAR blebrr_state;    // HZF
 //DECL_STATIC UCHAR blebrr_state;
 
@@ -283,8 +286,25 @@ BLEBRR_GAP_ADV_DATA blebrr_gap_adv_data[BLEBRR_GAP_MAX_ADVDATA_SETS] =
         20
     }
 };
+#ifdef MS_PRIVATE_SUPPORT
+BLEBRR_GAP_ADV_DATA private_gap_adv_data =
+{
 
-DECL_STATIC UCHAR pl_advdata_offset;
+    /* private BLE ADV Data */
+
+    {
+        0x02, 0x01, 0x06,
+        0x03, 0x02, 0x50, 0xFD,
+        0x17, 0x16,
+        0x50, 0xFD, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    },
+    /** Advertising Data length */
+    31
+};
+#endif
+#ifndef BLE_CLIENT_ROLE
+    DECL_STATIC UCHAR pl_advdata_offset;
+#endif
 UCHAR blebrr_sleep;
 
 
@@ -322,6 +342,7 @@ void blebrr_scan_enable(void)
     BLEBRR_UNLOCK_VOID();
 }
 
+#ifndef BLE_CLIENT_ROLE
 /**
     \brief
 
@@ -406,7 +427,7 @@ DECL_STATIC void blebrr_dequeue_manual (void)
 
     blebrr_queue.end = ei;
 }
-
+#endif
 
 /**
     \brief
@@ -462,6 +483,7 @@ DECL_STATIC BLEBRR_Q_ELEMENT* blebrr_dequeue (void)
     return elt;
 }
 
+#ifndef BLE_CLIENT_ROLE
 /**
     \brief
 
@@ -499,6 +521,7 @@ DECL_STATIC void blebrr_clear_bcon (UCHAR bconidx)
         blebrr_datacount--;
     }
 }
+#endif
 
 UCHAR blebrr_get_queue_depth(void)
 {
@@ -568,21 +591,26 @@ DECL_STATIC API_RESULT blebrr_update_advdata(void)
     is_proxy_beacon = 1;
 
     //ZQY skip bcon adv when queue is not empty
-//    printf("blebrr_get_queue_depth:%d\n",blebrr_get_queue_depth());
-
-    if(blebrr_update_advcount < BLEBRR_BCON_READY_TIME)
-    {
-        is_proxy_beacon = 0;
-        blebrr_update_advcount++;
-    }
-    else
-    {
-        blebrr_update_advcount = 0;
-    }
-
     if(blebrr_get_queue_depth()>BLEBRR_SKIP_BEACON_QUEUE_DEPTH)
     {
         is_proxy_beacon = 0;
+
+        if(blebrr_update_advcount < BLEBRR_BCON_READY_TIME)
+        {
+            blebrr_update_advcount++;
+        }
+    }
+    else
+    {
+        if(blebrr_update_advcount < BLEBRR_BCON_READY_TIME)
+        {
+            is_proxy_beacon = 0;
+            blebrr_update_advcount++;
+        }
+        else
+        {
+            blebrr_update_advcount = 0;
+        }
     }
 
     if (is_proxy_beacon)
@@ -597,6 +625,10 @@ DECL_STATIC API_RESULT blebrr_update_advdata(void)
                 elt = &blebrr_bcon[blebrr_bconidx];
                 is_proxy_beacon = 0;
             }
+
+//            if (elt != NULL) {
+//                BLEBRR_LOG("blebrr_bconidx %d\n", blebrr_bconidx);
+//            }
 
             if (BRR_BCON_COUNT == ++blebrr_bconidx)
             {
@@ -648,7 +680,7 @@ DECL_STATIC API_RESULT blebrr_update_advdata(void)
     DECL_STATIC void blebrr_timer_restart (UINT32 timeout);
 #endif
 
-
+#ifndef BLE_CLIENT_ROLE
 /**
     \brief
 
@@ -760,7 +792,6 @@ DECL_STATIC API_RESULT blebrr_send
     return API_SUCCESS;
 }
 
-
 /**
     \brief
 
@@ -810,10 +841,12 @@ DECL_STATIC API_RESULT blebrr_bcon_send(BRR_HANDLE* handle, void* pdata, UINT16 
             {
                 /* Active Beacon (advdata) Source Index */
                 UCHAR abs_index;
-                abs_index = blebrr_gatt_mode_get();
 
-                if (BLEBRR_GATT_PROV_MODE == abs_index)
+//                abs_index = blebrr_gatt_mode_get();
+                if (BRR_BCON_TYPE_UNPROV_DEVICE == bconidx)
                 {
+//                  BLEBRR_LOG("set pro mode %d\n",bconidx);
+                    abs_index = BLEBRR_GATT_PROV_MODE;
                     /* Copy the incoming UUID and OOB info to global connectable ADV data for PB GATT */
                     /* TODO have a state to decide about provisioned and unprovisioned state */
                     EM_mem_copy
@@ -829,11 +862,17 @@ DECL_STATIC API_RESULT blebrr_bcon_send(BRR_HANDLE* handle, void* pdata, UINT16 
                         in the global data strucutre blebrr_gap_adv_data[0].
                     */
                     /* Disable Interleaving */
+                    #ifndef MS_PRIVATE_SUPPORT
                     blebrr_scan_interleave = MS_FALSE;
+                    #endif
+                    /* Re-assign updated ADV data to Info Structure */
+                    info->bcon_data    = blebrr_gap_adv_data[abs_index].data + pl_advdata_offset;
+                    info->bcon_datalen = blebrr_gap_adv_data[abs_index].datalen - pl_advdata_offset;
                 }
                 /* Assuming that this Active Beacon is for GATT Proxy*/
-                else
+                else if((BRR_BCON_TYPE_PROXY_NODEID == bconidx)||(BRR_BCON_TYPE_PROXY_NETID == bconidx))
                 {
+//                  BLEBRR_LOG("set proxy mode\n");
                     /* Copy the incoming UUID and OOB info to global connectable ADV data for PB GATT */
                     /* TODO have a state to decide about provisioned and unprovisioned state */
                     abs_index = BLEBRR_GATT_PROXY_MODE;
@@ -852,11 +891,31 @@ DECL_STATIC API_RESULT blebrr_bcon_send(BRR_HANDLE* handle, void* pdata, UINT16 
                     */
                     blebrr_gap_adv_data[abs_index].data[BLEBRR_GATT_ADV_SERV_DATALEN_OFFSET] =
                         info->bcon_datalen + 1 + 2;
+                    /* Re-assign updated ADV data to Info Structure */
+                    info->bcon_data    = blebrr_gap_adv_data[abs_index].data + pl_advdata_offset;
+                    info->bcon_datalen = blebrr_gap_adv_data[abs_index].datalen - pl_advdata_offset;
                 }
 
-                /* Re-assign updated ADV data to Info Structure */
-                info->bcon_data    = blebrr_gap_adv_data[abs_index].data + pl_advdata_offset;
-                info->bcon_datalen = blebrr_gap_adv_data[abs_index].datalen - pl_advdata_offset;
+                #ifdef MS_PRIVATE_SUPPORT
+                else if(BRR_BCON_TYPE_PROXY_PRIV == bconidx)
+                {
+//                  BLEBRR_LOG("set priv proxy mode\n");
+                    /* Copy the incoming UUID and OOB info to global connectable ADV data for PB GATT */
+                    /* TODO have a state to decide about provisioned and unprovisioned state */
+                    //  abs_index = BLEBRR_GATT_PROXY_MODE;
+                    /* Copy the incoming Proxy ADV data */
+                    EM_mem_copy
+                    (
+                        info->bcon_data,
+                        private_gap_adv_data.data + 5,
+                        info->bcon_datalen
+                    );
+                    /* Re-assign updated ADV data to Info Structure */
+                    info->bcon_data    = private_gap_adv_data.data + pl_advdata_offset;
+                    info->bcon_datalen = private_gap_adv_data.datalen - pl_advdata_offset;
+                }
+
+                #endif
             }
 
             /* Check if beacon element is free */
@@ -873,6 +932,7 @@ DECL_STATIC API_RESULT blebrr_bcon_send(BRR_HANDLE* handle, void* pdata, UINT16 
             /* Update element type */
             elt->type = type;
             /* Schedule to send */
+//          BLEBRR_LOG("bs1\n");
             blebrr_send
             (
                 ((BRR_BCON_TYPE_UNPROV_DEVICE == bcon) &&
@@ -917,7 +977,7 @@ DECL_STATIC API_RESULT blebrr_bcon_send(BRR_HANDLE* handle, void* pdata, UINT16 
     BLEBRR_UNLOCK();
     return API_SUCCESS;
 }
-
+#endif
 
 /**
     \brief
@@ -934,6 +994,7 @@ DECL_STATIC API_RESULT blebrr_bcon_send(BRR_HANDLE* handle, void* pdata, UINT16 
 extern uint8 llState;
 extern uint8 llSecondaryState;
 
+#ifndef BLE_CLIENT_ROLE
 DECL_STATIC API_RESULT blebrr_adv_send(BRR_HANDLE* handle, UCHAR type, void* pdata, UINT16 datalen)
 {
     API_RESULT retval;
@@ -953,7 +1014,6 @@ DECL_STATIC API_RESULT blebrr_adv_send(BRR_HANDLE* handle, UCHAR type, void* pda
 
     /* Enable interleaving */
     blebrr_scan_interleave = MS_TRUE;
-    blebrr_update_advcount = BLEBRR_BCON_READY_TIME;    //send beacon immediately
 
     /* If beacon type, pass to the handler */
     if (MESH_AD_TYPE_BCON == type)
@@ -964,6 +1024,7 @@ DECL_STATIC API_RESULT blebrr_adv_send(BRR_HANDLE* handle, UCHAR type, void* pda
 
         if (BRR_BCON_TYPE_SECURE_NET != (info->type >> 4))
         {
+            blebrr_update_advcount = BLEBRR_BCON_READY_TIME;    //send beacon immediately
             return blebrr_bcon_send(handle, pdata, datalen);
         }
         else
@@ -989,6 +1050,7 @@ DECL_STATIC API_RESULT blebrr_adv_send(BRR_HANDLE* handle, UCHAR type, void* pda
         return API_FAILURE;
     }
 
+    blebrr_datacount++;
     /* Update element type */
     elt->type = BRR_BCON_COUNT;
     /* Schedule to send */
@@ -1001,14 +1063,16 @@ DECL_STATIC API_RESULT blebrr_adv_send(BRR_HANDLE* handle, UCHAR type, void* pda
              );
 
     if(retval == API_FAILURE)
+    {
         blebrr_dequeue_manual();
-    else
-        blebrr_datacount++;
+        blebrr_datacount--;
+    }
 
     /* Unlock */
     BLEBRR_UNLOCK();
     return API_SUCCESS;
 }
+#endif
 
 #ifdef BLEBRR_LP_SUPPORT
 DECL_STATIC void blebrr_adv_sleep(BRR_HANDLE* handle)
@@ -1235,12 +1299,12 @@ DECL_STATIC void blebrr_advscan_timeout_handler (void* args, UINT16 size)
     switch (BLEBRR_GET_STATE())
     {
     case BLEBRR_STATE_ADV_ENABLED:
-
+        blebrr_advertise_pl (MS_FALSE);
         /* Disable Adv */
-        if (!blebrr_advertise_pl (MS_FALSE))        // HZF
-            /* Update state */
+//        if (!blebrr_advertise_pl (MS_FALSE))        // HZF
+        /* Update state */
 //            BLEBRR_SET_STATE(BLEBRR_STATE_IN_ADV_DISABLE);
-            break;
+        break;
 
     case BLEBRR_STATE_SCAN_ENABLED:
         /* Disable Scan */
@@ -1287,6 +1351,7 @@ DECL_STATIC void blebrr_timer_start (UINT32 timeout)
         if (EM_SUCCESS != retval)
         {
             /* TODO: Log */
+            BLEBRR_LOG("blebrr_timer_start failed. Return 0x%04X \r\n", retval);
         }
     }
 }
@@ -1297,9 +1362,9 @@ void blebrr_timer_stop (void)
     {
         if(EM_stop_timer(&blebrr_timer_handle) != API_SUCCESS)
             return;
-    }
 
-    BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
+        BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
+    }
 }
 
 
@@ -1358,6 +1423,19 @@ void blebrr_pl_scan_setup (UCHAR enable)
         /* Yes, Update state */
         BLEBRR_SET_STATE(BLEBRR_STATE_SCAN_ENABLED);
 
+        if(blebrr_datacount == 0)
+        {
+            if (MS_TRUE == blebrr_sleep)
+            {
+                /*if scan enable llState cant update*/
+                if(BLEBRR_GET_STATE() == BLEBRR_STATE_SCAN_ENABLED)
+                    blebrr_scan_pl(MS_FALSE);
+
+                blebrr_timer_stop();
+                BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
+            }
+        }
+
         /* Is data available in queue to be sent? */
         if (0 != blebrr_datacount)
         {
@@ -1389,7 +1467,7 @@ void blebrr_pl_scan_setup (UCHAR enable)
             else
             {
                 /* Update state */
-                BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
+                blebrr_timer_stop();
             }
         }
         else
@@ -1448,6 +1526,8 @@ void blebrr_pl_advertise_setup (UCHAR enable)
         {
             /* Update state */
             blebrr_adv_restart = MS_FALSE;
+            blebrr_timer_stop();
+            /*clear mesh state*/
             BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
             return;
         }
@@ -1648,6 +1728,47 @@ void blebrr_pl_recv_advpacket (UCHAR type, UCHAR* pdata, UINT16 pdatalen, UCHAR 
     }
 }
 
+#ifdef BLE_CLIENT_ROLE
+/**
+    \brief
+
+    \par Description
+
+
+    \param type
+    \param pdata
+    \param pdatalen
+    \param rssi
+
+    \return void
+*/
+void blebrr_pl_recv_service_packet (UCHAR type, UCHAR* pdata, UINT16 pdatalen, UCHAR rssi)
+{
+    MS_BUFFER info;
+
+    /* Handle only if Non-Connectable (Passive) Advertising */
+    if (BRR_BCON_ACTIVE != type)
+    {
+        return;
+    }
+
+    /* Pack the RSSI as metadata */
+    info.payload = &rssi;
+    info.length = sizeof(UCHAR);
+
+    /* Deliver the packet to the bearer */
+    if (NULL != blebrr_service_info.bearer_recv)
+    {
+        /*  BLEBRR_LOG("[ADV-Rx <]: ");
+            BLEBRR_dump_bytes(pdata, pdatalen); */
+        blebrr_service_info.bearer_recv(&blebrr_advhandle, pdata, pdatalen, &info);
+    }
+    else
+    {
+        BLEBRR_LOG("BEARER RECV SERVICE Callback Currently NULL !!\n");
+    }
+}
+#endif
 /**
     \brief
 
@@ -1666,18 +1787,27 @@ void blebrr_register(void)
     blebrr_timer_handle = EM_TIMER_HANDLE_INIT_VAL;
     /* Initialize the transport */
     blebrr_init_pl();
+    #ifndef BLE_CLIENT_ROLE
     /* Get the platform Advdata initial offset if any */
     pl_advdata_offset = blebrr_get_advdata_offset_pl ();
+    #endif
     /* Reset the bearer sleep */
     blebrr_sleep = MS_FALSE;
     /* Add the Adv Bearer */
+    #ifdef BLE_CLIENT_ROLE
+    blebrr_adv.bearer_send = NULL;
+    #else
     blebrr_adv.bearer_send = blebrr_adv_send;
+    #endif
     #ifdef BLEBRR_LP_SUPPORT
     blebrr_adv.bearer_sleep = blebrr_adv_sleep;
     blebrr_adv.bearer_wakeup = blebrr_adv_wakeup;
     blebrr_lp_thandle = EM_TIMER_HANDLE_INIT_VAL;
     #endif /* BLEBRR_LP_SUPPORT */
     MS_brr_add_bearer(BRR_TYPE_ADV, &blebrr_adv, &blebrr_advhandle);
+    #ifdef BLE_CLIENT_ROLE
+    MS_brr_add_service_bearer(&blebrr_service_info);
+    #endif
     /* Enable all Mesh related Module Debugging */
     EM_enable_module_debug_flag
     (
@@ -1702,7 +1832,7 @@ void blebrr_register(void)
     /* Update state */
 //    BLEBRR_SET_STATE(BLEBRR_STATE_IN_SCAN_ENABLE);
     #else /* 0 */
-    BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
+//    BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
     #endif /* 0 */
 }
 

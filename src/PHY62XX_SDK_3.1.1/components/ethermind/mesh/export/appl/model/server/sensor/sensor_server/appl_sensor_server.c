@@ -1,4 +1,4 @@
-/**
+﻿/**
     \file appl_sensor_server.c
 */
 
@@ -11,7 +11,7 @@
 
 /* --------------------------------------------- Header File Inclusion */
 #include "appl_sensor_server.h"
-#include "appl_model_state_handler.h"
+#include "appl_sensor_state_handler.h"
 
 
 /* --------------------------------------------- Global Definitions */
@@ -51,6 +51,7 @@ void main_sensor_server_operations(/* IN */ UINT8 have_menu)
                  (
                      element_handle,
                      &appl_sensor_server_model_handle,
+                     &appl_sensor_setup_server_model_handle,
                      appl_sensor_server_cb
                  );
 
@@ -64,26 +65,6 @@ void main_sensor_server_operations(/* IN */ UINT8 have_menu)
         {
             CONSOLE_OUT(
                 "[ERR] Sensor Server Initialization Failed. Result: 0x%04X\n",
-                retval);
-        }
-
-        retval = MS_sensor_setup_server_init
-                 (
-                     element_handle,
-                     &appl_sensor_setup_server_model_handle,
-                     appl_sensor_setup_server_cb
-                 );
-
-        if (API_SUCCESS == retval)
-        {
-            CONSOLE_OUT(
-                "Sensor Setup Server Initialized. Model Handle: 0x%04X\n",
-                appl_sensor_setup_server_model_handle);
-        }
-        else
-        {
-            CONSOLE_OUT(
-                "[ERR] Sensor Setup Server Initialization Failed. Result: 0x%04X\n",
                 retval);
         }
 
@@ -122,7 +103,7 @@ void main_sensor_server_operations(/* IN */ UINT8 have_menu)
     }
 }
 
-#if 0
+#if 1
 /**
     \brief Server Application Asynchronous Notification Callback.
 
@@ -163,6 +144,9 @@ API_RESULT appl_sensor_server_cb
         case MS_STATE_SENSOR_DESCRIPTOR_T:
             break;
 
+        case MS_STATE_SENSOR_PROPERTY_ID_T:
+            break;
+
         case MS_STATE_SENSOR_CADENCE_T:
             break;
 
@@ -177,11 +161,14 @@ API_RESULT appl_sensor_server_cb
         case MS_STATE_SENSOR_DATA_T:
             break;
 
+        case MS_STATE_SENSOR_DATA_PROPERTY_ID_T:
+            break;
+
         case MS_STATE_SENSOR_SERIES_COLUMN_T:
             break;
         }
 
-        appl_model_state_get(state_params->state_type, 0, param_p, 0);
+        appl_sensor_state_get(state_params->state_type, 0, param_p, 0);
         current_state_params.state_type = state_params->state_type;
         current_state_params.state = param_p;
     }
@@ -189,7 +176,7 @@ API_RESULT appl_sensor_server_cb
     {
         CONSOLE_OUT(
             "[SENSOR] SET Request.\n");
-        appl_model_state_set(state_params->state_type, 0, state_params->state, 0);
+        appl_sensor_state_set(state_params->state_type, 0, state_params->state, 0);
         current_state_params.state_type = state_params->state_type;
         current_state_params.state = state_params->state;
     }
@@ -205,6 +192,8 @@ API_RESULT appl_sensor_server_cb
 
     return retval;
 }
+
+#if 0
 
 /**
     \brief Server Application Asynchronous Notification Callback.
@@ -282,5 +271,6 @@ API_RESULT appl_sensor_setup_server_cb
 
     return retval;
 }
+#endif
 
 #endif /* 0 */

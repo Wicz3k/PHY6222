@@ -251,7 +251,7 @@ extern void l2capNotifySignal( uint8 taskId, uint16 connHandle, uint8 status,
 extern void* L2CAP_Fragment_bm_alloc( uint16 size );
 
 extern uint8 L2CAP_Fragment_SendDataPkt( uint16 connHandle, uint8 fragFlg,uint16 pktLen, uint8* pBuf );
-
+extern uint8 l2cap_stack_InitContent(uint8 max_conn_num,l2capReassemblePkt_t* ressembleBuf,l2capSegmentBuff_t* segmentBuf);
 
 /*********************************************************************
     @fn      l2capInfoRsp

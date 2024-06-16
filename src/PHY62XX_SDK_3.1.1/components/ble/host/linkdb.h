@@ -81,6 +81,8 @@ extern "C"
 #define LINBDB_ERR_INSUFFICIENT_KEYSIZE     0x0c  // Link is encrypted but the key size is too small
 #define LINKDB_ERR_INSUFFICIENT_ENCRYPTION  0x0f  // Link is encrypted but it's not authenticated
 
+// Link Database call backs
+#define LINKDB_STACK_CALLBACK_NUM       6
 /*********************************************************************
     TYPEDEFS
 */
@@ -193,6 +195,8 @@ extern uint8 linkDB_Authen( uint16 connectionHandle, uint8 keySize, uint8 mitmRe
     linkDB_PerformFunc - Perform a function of each connection in the link database.
 */
 extern void linkDB_PerformFunc( pfnPerformFuncCB_t cb );
+
+extern uint8 linkDB_InitContext(uint8 max_link_num,linkDBItem_t* plinkDB,pfnLinkDBCB_t* plinkCBs);
 
 /*
     linkDB_Up - Check to see if a physical link is up (connected).

@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -52,6 +52,7 @@ extern "C"
 /*********************************************************************
     INCLUDES
 */
+#include "MS_features.h"
 
 /*********************************************************************
     CONSTANTS
@@ -74,6 +75,11 @@ extern uint8 bleMesh_TaskID;   // Task ID for internal task/event processing
 #define BLEMESH_KEY_LONG_PRESS_EVT                          0x0080
 #define BLEMESH_KEY_PRESS_EVT_LOOP                          0x0100
 #define BLEMESH_CHECK_NODE_EVT                              0x0200
+#ifdef BLE_CLIENT_ROLE
+#define START_DISCOVERY_SERVICE_EVT                         0x0400
+#define BLEMESH_CONNECT_TIMEOUT                             0x0800
+#endif
+
 //#define BLEMESH_KEY_REFRESH_EVT                             0x0800
 
 
@@ -94,6 +100,7 @@ extern void bleMesh_Init( uint8 task_id );
     Task Event Processor for the BLE Application
 */
 extern uint16 bleMesh_ProcessEvent( uint8 task_id, uint16 events );
+
 
 /*********************************************************************
 *********************************************************************/

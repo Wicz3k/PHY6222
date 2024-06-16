@@ -34,6 +34,7 @@
 #define SCH_LIST_NULL                   0x01
 #define SCH_INVALID_ERROR_CODE          0xFF
 
+#define MULTI_SCH_DELAY         500     // unit ms
 /*******************************************************************************************************
     @ Description    :  typedef -- multi role advertising parameter structure
     Modification History
@@ -62,6 +63,45 @@ typedef struct pAdv
     struct pAdv*     next;
 } multisch_adv_t;
 
+/*******************************************************************************************************
+    @ Description    :  multi role local typedef -- role type
+ *******************************************************************************************************/
+typedef enum
+{
+    advertiser = 1,
+    scanner,
+    initiator
+} GAPMultiRole_type;
+
+/*******************************************************************************************************
+    @ Description    :  multi role local typedef -- schedule list
+ *******************************************************************************************************/
+typedef struct multiList
+{
+    GAPMultiRole_type   role;
+    uint8   busy;
+    union
+    {
+        struct
+        {
+            uint8   perIdx;     // g_MultiPeriInfo index
+            uint8   DatConfUpd; // advertising data and scan response data
+            // configure and update status @ref macro def
+            // GAPMULTI_UPDATEADV_FLAG ...
+            GAPMultiRole_states_t state;
+        } adv;
+        struct
+        {
+            uint8 scanning;     // is scanning now?
+        } scan;
+        struct
+        {
+            uint8 initiating;
+        } initiate;
+    } roleScd;                  // role scheduler parameter
+    uint32 nextScdTime;         // next multi schedule time unit milliseconds
+    struct multiList* next;
+} multiScehdule_t;
 
 /*******************************************************************************************************
     @ Description    :  API FUNCTIONS ---- multi role for multi.c
@@ -140,7 +180,7 @@ void multiSchedule_advParam_del( uint8 idx);
     @author          :  PHY
  *******************************************************************************************************
  *******************************************************************************************************/
-uint8 muliSchedule_config(uint8 mode, uint8 en_flag);
+uint8 muliSchedule_config(uint8 mode, uint32 en_flag);
 
 /*******************************************************************************************************
  *******************************************************************************************************
@@ -172,10 +212,12 @@ void multiScheduleProcess(void);
     @author          :  PHY
  *******************************************************************************************************
  *******************************************************************************************************/
-uint16 multiLinkStatusGetSlaveConnHandle( uint8 idx);
+uint16 multiLinkStatusGetSlaveConnPeerIdx( uint8 idx);
 
 uint8 multiLinkConnParamUpdate( gapLinkUpdateEvent_t* pPkt );
 extern uint8 multiLinkGetMasterConnNum(void);
+uint8_t multiRole_findInitScanNode( void );
+multiScehdule_t* multiRole_findBusyNode( void );
 
 #endif
 

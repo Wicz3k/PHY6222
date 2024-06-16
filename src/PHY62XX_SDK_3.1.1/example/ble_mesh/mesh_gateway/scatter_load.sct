@@ -41,7 +41,7 @@ LR_ROM_XIP  0x11020000 0x01e000 {
 	uart.o(+RO)
 	em_timer.o(+RO)
 	vendormodel_client.o(+RO)
-	mesh_clients.o(+RO)
+	;mesh_clients.o(+RO)
 	;model_state_handler_pl.o(+RO)
 	blebrr_pl.o(+RO)
 	blebrr.o(+RO)
@@ -63,7 +63,11 @@ LR_ROM_XIP  0x11020000 0x01e000 {
 	aes-ccm.o(+RO)
 	aes.o(+RO)
 	cli_model.o(+RO)
-	*.o(_section_xip_code_)
+	access_ps.o(+RO)
+	ms_limit_config.o(+RO)
+	printfa.o(+RO)
+;	appl_prov.o(+RO)
+   *.o(_section_xip_code_, _func_xip_code_.*)
   }
  }  
 

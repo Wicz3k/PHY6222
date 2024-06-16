@@ -49,8 +49,6 @@
 
 key_contex_t key_state;
 
-extern uint32 getMcuPrecisionCount(void);
-
 static int key_timer_start(uint32 intval_ms)
 {
     osal_start_timerEx(key_state.task_id, HAL_KEY_EVENT, intval_ms);

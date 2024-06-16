@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -79,12 +79,13 @@
         HAL_EXIT_CRITICAL_SECTION();\
     }while(0);
 
-#define spif_wait_nobusy(flg, tout_ns, return_val)   {if(_spif_wait_nobusy_x(flg, tout_ns)){if(return_val){ return return_val;}}}
 
-static xflash_Ctx_t s_xflashCtx = {.spif_ref_clk=SYS_CLK_DLL_64M,.rd_instr=XFRD_FCMD_READ_DUAL};
+static xflash_Ctx_t s_xflashCtx = {.rd_instr=XFRD_FCMD_READ_DUAL};
+
+bool spif_dma_use = false;
 
 chipMAddr_t  g_chipMAddr;
-
+extern void ll_patch_restore(uint8_t flg);
 __ATTR_SECTION_SRAM__  static inline uint32_t spif_lock()
 {
     HAL_ENTER_CRITICAL_SECTION();
@@ -93,6 +94,7 @@ __ATTR_SECTION_SRAM__  static inline uint32_t spif_lock()
     NVIC->ICER[0] = 0xFFFFFFFF;
     //enable ll irq and tim1 irq
     NVIC->ISER[0] = 0x100010;
+    ll_patch_restore(0);//clean ll patch
     HAL_EXIT_CRITICAL_SECTION();
     return vic_iser;
 }
@@ -101,10 +103,11 @@ __ATTR_SECTION_SRAM__  static inline void spif_unlock(uint32_t vic_iser)
 {
     HAL_ENTER_CRITICAL_SECTION();
     NVIC->ISER[0] = vic_iser;
+    ll_patch_restore(1);//restore ll patch
     HAL_EXIT_CRITICAL_SECTION();
 }
 
-static void hal_cache_tag_flush(void)
+void hal_cache_tag_flush(void)
 {
     HAL_ENTER_CRITICAL_SECTION();
     uint32_t cb = AP_PCR->CACHE_BYPASS;
@@ -136,12 +139,23 @@ static void hal_cache_tag_flush(void)
 }
 
 
-static uint8_t _spif_read_status_reg_x(void)
+static uint8_t _spif_read_status_reg_x(bool rdst_h)
 {
     uint8_t status;
-    spif_cmd(FCMD_RDST, 0, 2, 0, 0, 0);
-    SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_rddata(&status, 1);
+
+    if (rdst_h)
+    {
+        spif_cmd(FCMD_RDST_H, 0, 2, 0, 0, 0);
+        SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
+        spif_rddata(&status, 1);
+    }
+    else
+    {
+        spif_cmd(FCMD_RDST, 0, 2, 0, 0, 0);
+        SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
+        spif_rddata(&status, 1);
+    }
+
     return status;
 }
 
@@ -152,7 +166,7 @@ static int _spif_wait_nobusy_x(uint8_t flg, uint32_t tout_ns)
 
     for(; tout ; tout --)
     {
-        status = _spif_read_status_reg_x();
+        status = _spif_read_status_reg_x(FALSE);
 
         if((status & flg) == 0)
             return PPlus_SUCCESS;
@@ -163,6 +177,21 @@ static int _spif_wait_nobusy_x(uint8_t flg, uint32_t tout_ns)
     }
 
     return PPlus_ERR_BUSY;
+}
+
+static int spif_wait_nobusy(uint8_t flg, int tout_ns)
+{
+    uint8_t ret = PPlus_SUCCESS;
+    ret = _spif_wait_nobusy_x(flg, tout_ns);
+
+    if (ret)
+    {
+        LOG("!! flash Busy !!");
+
+        while (1);
+    }
+
+    return ret;
 }
 
 static void hal_cache_init(void)
@@ -184,82 +213,115 @@ static void hal_cache_init(void)
     AP_PCR->CACHE_BYPASS = 0;
 }
 
-FLASH_CHIP_INFO phy_flash =
-{
-    .init_flag = FALSE,
-    .IdentificationID = 0x00,
-    .Capacity = 0x80000,
-};
-
 
 int hal_get_flash_info(void)
 {
-    uint32_t cs;
-    uint8_t data[17];
-
-    if(phy_flash.init_flag == TRUE)
-    {
-        return PPlus_SUCCESS;
-    }
-
-    cs = spif_lock();
-    SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
-    spif_cmd(FCMD_RDID, 0, 3, 0, 0, 0);
-    spif_rddata(data, 3);
-    SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
-    spif_unlock(cs);
-    phy_flash.IdentificationID = (data[2]<<16) | (data[1]<<8) | data[0];
-
-    if((data[2] >= 0x11) && (data[2] <= 0x16))//most use:256K~2M.reserved:128K,4M
-    {
-        phy_flash.Capacity = (1ul << data[2]);
-        *(volatile int*)0x1fff0898 = phy_flash.Capacity;
-    }
-    else
-    {
-        phy_flash.Capacity = 512*1024;
-        *(volatile int*)0x1fff0898 = phy_flash.Capacity;
-    }
-
-    phy_flash.init_flag = TRUE;
+    spif_read_id(NULL);
     return PPlus_SUCCESS;
 }
 
 #if(FLASH_PROTECT_FEATURE == 1)
-int hal_flash_lock(void)
+static FLASH_PROTECT_INFO flash_protect_data =
+{
+    .bypass_flash_lock = FALSE,
+    .module_ID = MAIN_INIT,
+};
+
+int hal_flash_enable_lock(module_ID_t id)
+{
+    uint8_t ret = PPlus_ERR_BUSY;
+
+    if ((flash_protect_data.module_ID == id) || (flash_protect_data.module_ID == MAIN_INIT))
+    {
+        flash_protect_data.bypass_flash_lock = FALSE;
+        ret = hal_flash_lock();
+    }
+
+    return ret;
+}
+
+int hal_flash_disable_lock(module_ID_t id)
+{
+    uint8_t ret = PPlus_SUCCESS;
+    ret = hal_flash_unlock();
+
+    if (ret != PPlus_SUCCESS)
+    {
+        return ret;
+    }
+
+    flash_protect_data.module_ID = id;
+    flash_protect_data.bypass_flash_lock = TRUE;
+    return ret;
+}
+
+#if(FLASH_PROTECT_CMP_ENABLE == 1)
+int hal_flash_write_status_register(uint8_t reg_data)
 {
     uint32_t cs = spif_lock();
-    SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
-    AP_SPIF->fcmd = 0x6000001;
-    SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
-    AP_SPIF->fcmd_wrdata[0] = 0x7c;
-    SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
-    AP_SPIF->fcmd = 0x1008001;
-    SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    uint8_t data[2];
+    spif_cmd(FCMD_WREN, 0, 0, 0, 0, 0);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
+    data[0] = reg_data & 0xff;
+    data[1] = 0x40;
+    spif_wrdata(data, 2);
+    spif_cmd(FCMD_WRST, 0, 0, 2, 0, 0);
+    spif_wait_nobusy(SFLG_WELWIP, SPIF_TIMEOUT);
     spif_unlock(cs);
+    return PPlus_SUCCESS;
+}
+#else
+int hal_flash_write_status_register(uint8_t reg_data)
+{
+    uint32_t cs = spif_lock();
+    uint8_t data[2];
+    spif_cmd(FCMD_WREN, 0, 0, 0, 0, 0);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
+    data[0] = reg_data & 0xff;
+    data[1] = 0x0;
+    spif_wrdata(data, 1);
+    spif_cmd(FCMD_WRST, 0, 0, 1, 0, 0);
+    spif_wait_nobusy(SFLG_WELWIP, SPIF_TIMEOUT);
+    spif_unlock(cs);
+    return PPlus_SUCCESS;
+}
+#endif
+
+int hal_flash_lock(void)
+{
+    if (flash_protect_data.bypass_flash_lock == TRUE)
+    {
+        return PPlus_ERR_FORBIDDEN;
+    }
+
+    if (hal_flash_get_lock_state() != 0)
+    {
+        return PPlus_SUCCESS;
+    }
+
+    hal_flash_write_status_register(FLASH_PROTECT_AREA);
     return PPlus_SUCCESS;
 }
 
 int hal_flash_unlock(void)
 {
+    if (flash_protect_data.bypass_flash_lock == TRUE)
+    {
+        return PPlus_ERR_FORBIDDEN;
+    }
+
     uint32_t cs = spif_lock();
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     AP_SPIF->fcmd = 0x6000001;
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     AP_SPIF->fcmd_wrdata[0] = 0x00;
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
-    AP_SPIF->fcmd = 0x1008001;
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
+    AP_SPIF->fcmd = 0x1009001;
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     spif_unlock(cs);
     return PPlus_SUCCESS;
 }
@@ -269,17 +331,43 @@ uint8_t hal_flash_get_lock_state(void)
     uint32_t cs = spif_lock();
     uint8_t status;
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    status = _spif_read_status_reg_x();
-    status = (status & 0x7c)>>2;
+    status = (_spif_read_status_reg_x(FALSE) & 0x7C) >> 2;
+
+    if (_spif_read_status_reg_x(TRUE) & 0x40)
+        status |= 0x40;
+
     spif_unlock(cs);
     return status;
 }
 #endif
 
+#ifdef XFLASH_HIGH_SPEED
+static void hw_spif_config_high_speed(sysclk_t ref_clk)
+{
+    volatile uint32_t tmp = AP_SPIF->config;
+    tmp =  (tmp & (~ (0xf << 19))) | (0 << 19);
+    AP_SPIF->config = tmp;
+    subWriteReg(&AP_SPIF->rddata_capture, 4, 1, 2);
+}
+#endif
+
 static void hw_spif_cache_config(void)
 {
-    spif_config(s_xflashCtx.spif_ref_clk,/*div*/1,s_xflashCtx.rd_instr,0,0);
+    extern volatile sysclk_t g_system_clk;
+    sysclk_t spif_ref_clk = (g_system_clk > SYS_CLK_XTAL_16M) ? SYS_CLK_DLL_64M : g_system_clk;
+
+    if(s_xflashCtx.rd_instr == XFRD_FCMD_READ_QUAD)
+        spif_config(spif_ref_clk,/*div*/1,s_xflashCtx.rd_instr,0,1);
+    else
+        spif_config(spif_ref_clk,/*div*/1,s_xflashCtx.rd_instr,0,0);
+
+    #ifdef XFLASH_HIGH_SPEED
+    hw_spif_config_high_speed(spif_ref_clk);
+    #endif
     AP_SPIF->wr_completion_ctrl=0xff010005;//set longest polling interval
+    AP_SPIF->low_wr_protection = 0;
+    AP_SPIF->up_wr_protection = 0x10;
+    AP_SPIF->wr_protection = 0x2;
     NVIC_DisableIRQ(SPIF_IRQn);
     NVIC_SetPriority((IRQn_Type)SPIF_IRQn, IRQ_PRIO_HAL);
     hal_cache_init();
@@ -303,11 +391,11 @@ int hal_flash_read(uint32_t addr, uint8_t* data, uint32_t size)
     uint32_t cb = AP_PCR->CACHE_BYPASS;
     uint32_t remap;
 
-    if(phy_flash.Capacity > 0x80000)
+    if((addr & 0xffffff) > 0x7ffff)
     {
         remap = addr & 0xf80000;
 
-        if (remap)
+        if(remap)
         {
             AP_SPIF->remap = remap;
             AP_SPIF->config |= 0x10000;
@@ -330,13 +418,10 @@ int hal_flash_read(uint32_t addr, uint8_t* data, uint32_t size)
         HAL_CACHE_EXIT_BYPASS_SECTION();
     }
 
-    if(phy_flash.Capacity > 0x80000)
+    if(((addr & 0xffffff) > 0x7ffff) && remap)
     {
-        if (remap)
-        {
-            AP_SPIF->remap = 0;
-            AP_SPIF->config &= ~0x10000ul;
-        }
+        AP_SPIF->remap = 0;
+        AP_SPIF->config &= ~0x10000ul;
     }
 
     spif_unlock(cs);
@@ -352,10 +437,10 @@ int hal_flash_write(uint32_t addr, uint8_t* data, uint32_t size)
     uint32_t cs = spif_lock();
     HAL_CACHE_ENTER_BYPASS_SECTION();
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     retval = spif_write(addr,data,size);
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     HAL_CACHE_EXIT_BYPASS_SECTION();
     spif_unlock(cs);
     #if(FLASH_PROTECT_FEATURE == 1)
@@ -370,15 +455,21 @@ int hal_flash_write_by_dma(uint32_t addr, uint8_t* data, uint32_t size)
     #if(FLASH_PROTECT_FEATURE == 1)
     hal_flash_unlock();
     #endif
+
+    if(spif_dma_use == true)
+        return PPlus_ERR_FORBIDDEN;
+
+    spif_dma_use = true;
     uint32_t cs = spif_lock();
     HAL_CACHE_ENTER_BYPASS_SECTION();
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     retval = spif_write_dma(addr,data,size);
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     HAL_CACHE_EXIT_BYPASS_SECTION();
     spif_unlock(cs);
+    spif_dma_use = false;
     #if(FLASH_PROTECT_FEATURE == 1)
     hal_flash_lock();
     #endif
@@ -395,10 +486,10 @@ int hal_flash_erase_sector(unsigned int addr)
     uint32_t cb = AP_PCR->CACHE_BYPASS;
     HAL_CACHE_ENTER_BYPASS_SECTION();
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     retval = spif_erase_sector(addr);
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WELWIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WELWIP, SPIF_TIMEOUT);
     HAL_CACHE_EXIT_BYPASS_SECTION();
 
     if(cb == 0)
@@ -423,10 +514,10 @@ int hal_flash_erase_block64(unsigned int addr)
     uint32_t cb = AP_PCR->CACHE_BYPASS;
     HAL_CACHE_ENTER_BYPASS_SECTION();
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     retval = spif_erase_block64(addr);
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WELWIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WELWIP, SPIF_TIMEOUT);
     HAL_CACHE_EXIT_BYPASS_SECTION();
 
     if(cb == 0)
@@ -451,10 +542,10 @@ int hal_flash_erase_all(void)
     uint32_t cb = AP_PCR->CACHE_BYPASS;
     HAL_CACHE_ENTER_BYPASS_SECTION();
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WIP, SPIF_TIMEOUT);
     retval = spif_erase_all();
     SPIF_STATUS_WAIT_IDLE(SPIF_WAIT_IDLE_CYC);
-    spif_wait_nobusy(SFLG_WELWIP, SPIF_TIMEOUT, PPlus_ERR_BUSY);
+    spif_wait_nobusy(SFLG_WELWIP, SPIF_TIMEOUT);
     HAL_CACHE_EXIT_BYPASS_SECTION();
 
     if(cb == 0)
@@ -473,7 +564,7 @@ int flash_write_word(unsigned int offset, uint32_t  value)
 {
     uint32_t temp = value;
     offset &= 0x00ffffff;
-    return (hal_flash_write (offset, (uint8_t*) &temp, 4));
+    return (hal_flash_write_by_dma (offset, (uint8_t*) &temp, 4));
 }
 
 CHIP_ID_STATUS_e read_chip_mAddr(void)

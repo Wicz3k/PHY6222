@@ -46,8 +46,6 @@ key_contex_t key_state;
 key_pin_t   m_key_pin;
 
 
-extern uint32 getMcuPrecisionCount(void);
-
 static int key_timer_start(uint32 intval_ms)
 {
     osal_start_timerEx(bleMesh_TaskID, BLEMESH_KEY_PRESS_PRO_EVT, intval_ms);

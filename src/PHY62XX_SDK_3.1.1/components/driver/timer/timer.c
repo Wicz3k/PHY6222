@@ -36,6 +36,17 @@
 #include "pwrmgr.h"
 #include "jump_function.h"
 
+#ifndef TIM2_IRQHANDLER1_ENABLE
+    #define TIM2_IRQHANDLER1_ENABLE 0
+#endif
+
+#if (TIM2_IRQHANDLER1_ENABLE==TRUE)
+    extern uint32_t  g_TIM2_IRQ_TIM3_CurrCount;
+    extern uint32_t  g_TIM2_IRQ_PendingTick;
+    extern uint32 osal_sys_tick;
+    extern int clear_timer_int(AP_TIM_TypeDef* TIMx);
+#endif
+
 AP_TIM_TypeDef* const TimerIndex[FREE_TIMER_NUMBER]= {AP_TIM5,AP_TIM6};
 static ap_tm_hdl_t s_ap_callback = NULL;
 
@@ -65,6 +76,39 @@ static void hal_timer_set_loadtimer(AP_TIM_TypeDef* TIMx, int time)
         TIMx->ControlReg = 0x0;
     }
 }
+#if (TIM2_IRQHANDLER1_ENABLE==TRUE)
+void __attribute__((used)) __ATTR_SECTION_SRAM__ TIM2_IRQHandler1(void)
+{
+    HAL_ENTER_CRITICAL_SECTION();
+
+    if (AP_TIM2->status & 0x1)
+    {
+        clear_timer_int(AP_TIM2);
+        g_TIM2_IRQ_TIM3_CurrCount = AP_TIM3->CurrentCount;
+        g_TIM2_IRQ_PendingTick = AP_TIM2->CurrentCount;
+        uint32_t tim2_delay_tick, tim3_DeltTick;
+        static uint32_t AP_TIM3_LastCount = 0, Tim3_tick_Remainder = 0;
+        tim3_DeltTick = (AP_TIM3_LastCount > g_TIM2_IRQ_TIM3_CurrCount)
+                        ? (AP_TIM3_LastCount - g_TIM2_IRQ_TIM3_CurrCount + Tim3_tick_Remainder)
+                        : (0xFFFFFD - g_TIM2_IRQ_TIM3_CurrCount + AP_TIM3_LastCount + Tim3_tick_Remainder);
+        AP_TIM3_LastCount = g_TIM2_IRQ_TIM3_CurrCount;
+        tim2_delay_tick = (tim3_DeltTick / 2500);
+
+        if (tim2_delay_tick >= 1)
+        {
+            Tim3_tick_Remainder = (tim3_DeltTick - tim2_delay_tick * 2500);
+            osal_sys_tick += tim2_delay_tick;
+        }
+        else
+        {
+            Tim3_tick_Remainder = (2500 - tim3_DeltTick);
+            osal_sys_tick++;
+        }
+    }
+
+    HAL_EXIT_CRITICAL_SECTION();
+}
+#endif
 
 void __attribute__((used)) hal_TIMER5_IRQHandler(void)
 {
@@ -147,17 +191,17 @@ int hal_timer_stop(User_Timer_e timeId)
     switch(timeId)
     {
     case AP_TIMER_ID_5:
-        JUMP_FUNCTION(TIM5_IRQ_HANDLER) = 0;
-        hal_timer_stop_counter(AP_TIM5);
         NVIC_DisableIRQ((IRQn_Type)TIM5_IRQn);
+        hal_timer_stop_counter(AP_TIM5);
         hal_clk_gate_disable(MOD_TIMER5);
+        JUMP_FUNCTION(TIM5_IRQ_HANDLER) = 0;
         break;
 
     case AP_TIMER_ID_6:
-        JUMP_FUNCTION(TIM6_IRQ_HANDLER) = 0;
-        hal_timer_stop_counter(AP_TIM6);
         NVIC_DisableIRQ((IRQn_Type)TIM6_IRQn);
+        hal_timer_stop_counter(AP_TIM6);
         hal_clk_gate_disable(MOD_TIMER6);
+        JUMP_FUNCTION(TIM6_IRQ_HANDLER) = 0;
         break;
 
     default:

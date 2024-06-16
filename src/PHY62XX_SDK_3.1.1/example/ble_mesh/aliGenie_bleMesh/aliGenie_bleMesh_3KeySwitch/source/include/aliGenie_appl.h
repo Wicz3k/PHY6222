@@ -233,6 +233,7 @@ extern MS_ACCESS_MODEL_HANDLE    UI_health_server_model_handle;
     \param [in] ext_params    Additional parameters.
 */
 extern void vm_subscription_add ( MS_ACCESS_ELEMENT_HANDLE element_handle,MS_NET_ADDR addr);
+extern API_RESULT UI_get_net_key(void );
 extern API_RESULT UI_get_device_key(void );
 extern API_RESULT UI_binding_app_key(MS_ACCESS_MODEL_HANDLE model_handle);
 extern void UI_vendor_defined_model_states_initialization(void);

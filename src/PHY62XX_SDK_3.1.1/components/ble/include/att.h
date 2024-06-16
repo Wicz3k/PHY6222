@@ -1267,7 +1267,7 @@ extern attMTU_t g_attMtuClientServer;
 
 
 // for multi-role
-extern uint16  gAttMtuSize[];
+extern uint16*  gAttMtuSize;
 
 /*********************************************************************
 *********************************************************************/

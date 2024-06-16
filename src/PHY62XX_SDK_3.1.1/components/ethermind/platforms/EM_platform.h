@@ -19,16 +19,18 @@
 #include <string.h>
 #include <stdarg.h>
 
-#include "osal.h"
+#include "OSAL.h"
+#include "rom_sym_def.h"
 
 /* --------------------------------------------- Global Definitions */
 #define EM_HAVE_STATIC_DECL
 #define EM_HAVE_CONST_DECL
+extern void log_printf(const char* format, ...);
 
 /* --------------------------------------------- Structures/Data Types */
 
 /* --------------------------------------------- Macros */
-#define printf(...)     {printf (__VA_ARGS__); printf("\r\n"); fflush(stdout);}
+#define printf(...)     {log_printf (__VA_ARGS__); log_printf("\r\n"); fflush(stdout);}
 #define scanf(...)
 
 /* --------------------------------------------- Internal Functions */

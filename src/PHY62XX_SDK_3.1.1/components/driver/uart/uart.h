@@ -175,6 +175,8 @@ int hal_uart_set_tx_buf(UART_INDEX_e uart_index,uint8_t* buf, uint16_t size);
 int hal_uart_get_tx_ready(UART_INDEX_e uart_index);
 int hal_uart_send_buff(UART_INDEX_e uart_index,uint8_t* buff,uint16_t len);
 int hal_uart_send_byte(UART_INDEX_e uart_index,unsigned char data);
+int hal_uart_get_parity_plan(UART_INDEX_e uart_index);
+int hal_uart_set_parity_plan(UART_INDEX_e uart_index, bool even_parity);
 void __attribute__((weak)) hal_UART0_IRQHandler(void);
 void __attribute__((weak)) hal_UART1_IRQHandler(void);
 

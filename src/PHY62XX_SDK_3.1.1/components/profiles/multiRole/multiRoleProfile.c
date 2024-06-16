@@ -134,7 +134,7 @@ static uint8 multiProfileChar2UserDesp[] = "NOTIFY\0";
 // instantiation of the Client Characteristic Configuration. Reads of the
 // Client Characteristic Configuration only shows the configuration for
 // that client and writes only affect the configuration of that client.
-static gattCharCfg_t multiProfileChar2Config[MAX_NUM_LL_CONN];
+static gattCharCfg_t multiProfileChar2Config[GATT_MAX_NUM_CONN];
 #endif
 
 

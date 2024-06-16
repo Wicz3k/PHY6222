@@ -65,13 +65,14 @@ extern "C"
     Profile Callbacks
 */
 
-// Callback when a characteristic value has changed
-typedef void (*ppsp_serv_hdlr_char_upda_t)( uint8 para, uint16 coun );
+// Callback when a characteristic value has changed by client
+// typedef void (*ppsp_serv_hdlr_char_upda_t)( uint8 para, uint16 coun );
 
 typedef struct
 {
-    ppsp_serv_hdlr_char_upda_t char_upda;  // Called when characteristic value changes
-} ppsp_serv_appl_CBs_t;
+    // ppsp_serv_hdlr_char_upda_t char_upda;  // Called when characteristic value changes
+    void (*ppsp_serv_char_upda_hdlr)( uint8 para, const void* valu, uint16 coun );
+} ppsp_serv_appl_hdlr_t;
 
 
 
@@ -96,7 +97,7 @@ extern bStatus_t ppsp_serv_add_serv(uint32 serv);
 
       appCallbacks - pointer to application callbacks.
 */
-extern bStatus_t ppsp_serv_reg_appl( ppsp_serv_appl_CBs_t* appl_hdlr );
+extern bStatus_t ppsp_serv_reg_appl( ppsp_serv_appl_hdlr_t* hdlr );
 
 /*
     SimpleProfile_SetParameter - Set a Simple GATT Profile parameter.
@@ -108,7 +109,7 @@ extern bStatus_t ppsp_serv_reg_appl( ppsp_serv_appl_CBs_t* appl_hdlr );
             data type (example: data type of uint16 will be cast to
             uint16 pointer).
 */
-extern bStatus_t ppsp_serv_set_para( uint8 para, uint16 leng, void* valu );
+extern bStatus_t ppsp_serv_set_para( uint8 para, void* valu, uint16 leng );
 
 /*
     SimpleProfile_GetParameter - Get a Simple GATT Profile parameter.
@@ -121,7 +122,6 @@ extern bStatus_t ppsp_serv_set_para( uint8 para, uint16 leng, void* valu );
 */
 extern bStatus_t ppsp_serv_get_para( uint8 para, void* valu, uint16 leng );
 
-// extern bStatus_t simpleProfile_Notify( uint8 param, uint8 len, void *value );
 /*********************************************************************
 *********************************************************************/
 

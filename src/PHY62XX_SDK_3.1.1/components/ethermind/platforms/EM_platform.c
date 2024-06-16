@@ -50,7 +50,7 @@ int fgetc(FILE* f)
 }
 
 
-int ferror(FILE* f)
+int (ferror)(FILE* f)
 {
     /* Your implementation of ferror */
     return EOF;

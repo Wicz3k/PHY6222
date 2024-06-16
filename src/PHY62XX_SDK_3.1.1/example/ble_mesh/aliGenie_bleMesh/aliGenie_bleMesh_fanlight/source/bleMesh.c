@@ -65,6 +65,7 @@
 #include "sha256.h"
 #include "ali_genie_profile.h"
 #include "led_light.h"
+#include "global_config.h"
 
 #ifdef ETHERMIND
     #include "EM_os.h"
@@ -110,12 +111,13 @@
     EXTERNAL VARIABLES
 */
 extern PROV_DEVICE_S UI_lprov_device;
-
+extern uint8 ll_recv_scan_all_cnt;
 
 /*********************************************************************
     EXTERNAL FUNCTIONS
 */
 
+extern __ATTR_SECTION_XIP__ void global_config_maxscanrsplen(uint8 maxScanResponses);
 extern API_RESULT blebrr_handle_le_connection_pl
 (
     uint16_t  conn_idx,
@@ -196,6 +198,7 @@ void bleMesh_Init( uint8 task_id )
     GAP_ParamsInit (bleMesh_TaskID, (GAP_PROFILE_PERIPHERAL | GAP_PROFILE_CENTRAL));
     /* printf ("Ret - %02x\r\n", ret); */
     GAP_CentDevMgrInit(0xFF);
+    global_config_maxscanrsplen(0x40);
     /* printf ("Ret - %02x\r\n", ret); */
     GAP_PeriDevMgrInit();
     /* printf ("Ret - %02x\r\n", ret); */
@@ -438,6 +441,8 @@ static void bleMesh_ProcessGAPMsg( gapEventHdr_t* pMsg )
         break;
 
     case GAP_DEVICE_DISCOVERY_EVENT:    //scan start/stop
+        ll_recv_scan_all_cnt = 0;
+
         if (TRUE == bleMesh_DiscCancel)
         {
             osal_stop_timerEx(bleMesh_TaskID, BLEMESH_GAP_MSG_EVT);
@@ -471,10 +476,17 @@ static void bleMesh_ProcessGAPMsg( gapEventHdr_t* pMsg )
     case GAP_DEVICE_INFO_EVENT:
         dev = (gapDeviceInfoEvent_t*)pMsg;
         blebrr_handle_evt_adv_report(dev);
+        HAL_ENTER_CRITICAL_SECTION();
+
+        if(ll_recv_scan_all_cnt != 0)
+            ll_recv_scan_all_cnt--;
+
+        HAL_EXIT_CRITICAL_SECTION();
         break;
 
     case GAP_LINK_ESTABLISHED_EVENT:
     {
+        blebrr_scan_enable();
         gapEstLinkReqEvent_t* pPkt = (gapEstLinkReqEvent_t*)pMsg;
         printf("\r\n GAP_LINK_ESTABLISHED_EVENT received! \r\n");
 
@@ -537,7 +549,7 @@ bStatus_t BLE_gap_set_scan_params
     GAP_SetParamValue( TGAP_GEN_DISC_SCAN_WIND, scan_window );
     GAP_SetParamValue( TGAP_GEN_DISC_SCAN_INT, scan_interval );
     GAP_SetParamValue( TGAP_FILTER_ADV_REPORTS, FALSE);
-    GAP_SetParamValue( TGAP_GEN_DISC_SCAN, 30000 );
+    GAP_SetParamValue( TGAP_GEN_DISC_SCAN, 1000 );
     GAP_SetParamValue( TGAP_CONN_SCAN_INT,scan_interval );
     GAP_SetParamValue( TGAP_CONN_SCAN_WIND,scan_window);
     //GAP_SetParamValue( TGAP_LIM_DISC_SCAN, 0xFFFF );
@@ -562,6 +574,7 @@ bStatus_t BLE_gap_set_scan_enable
 
         if (0 == ret)
         {
+            bleMesh_DiscCancel = FALSE;
             osal_set_event (bleMesh_TaskID, BLEMESH_GAP_SCANENABLED);
         }
     }
@@ -569,7 +582,7 @@ bStatus_t BLE_gap_set_scan_enable
     {
         ret = GAP_DeviceDiscoveryCancel(bleMesh_TaskID);
 
-        if (0 == ret)
+        if ((0 == ret) ||(bleIncorrectMode == ret))
         {
             bleMesh_DiscCancel = TRUE;
             osal_start_timerEx(bleMesh_TaskID, BLEMESH_GAP_MSG_EVT, 10*1000);

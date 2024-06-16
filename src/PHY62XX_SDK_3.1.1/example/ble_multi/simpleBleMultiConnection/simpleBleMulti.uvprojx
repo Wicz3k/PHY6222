@@ -15,7 +15,7 @@
         <TargetCommonOption>
           <Device>ARMCM0</Device>
           <Vendor>ARM</Vendor>
-          <PackID>ARM.CMSIS.5.0.0</PackID>
+          <PackID>ARM.CMSIS.5.6.0</PackID>
           <PackURL>http://www.keil.com/pack/</PackURL>
           <Cpu>IRAM(0x20000000,0x20000) IROM(0x00000000,0x40000) CPUTYPE("Cortex-M0") CLOCK(12000000) ESEL ELITTLE</Cpu>
           <FlashUtilSpec></FlashUtilSpec>
@@ -333,9 +333,9 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls>-DADV_NCONN_CFG=0x01  -DADV_CONN_CFG=0x02  -DSCAN_CFG=0x04   -DINIT_CFG=0x08   -DBROADCASTER_CFG=0x01 -DOBSERVER_CFG=0x02  -DPERIPHERAL_CFG=0x04  -DCENTRAL_CFG=0x08 -DHOST_CONFIG=0xc</MiscControls>
-              <Define>OSALMEM_METRICS=0 DBG_ROM_MAIN=0 MTU_SIZE=247 DEBUG_INFO=1 _BUILD_FOR_DTM_=0 ENABLE_LOG_ROM_=0 HOST_CONFIG=0xC HCI_TL_NONE=1 OSAL_CBTIMER_NUM_TASKS=1 CFG_CP PHY_MCU_TYPE=MCU_BUMBEE_M0 CFG_SLEEP_MODE=PWR_MODE_NO_SLEEP MULTI_DEBUG MAX_NUM_LL_CONN=5</Define>
+              <Define>OSALMEM_METRICS=0 DBG_ROM_MAIN=0 MTU_SIZE=247 DEBUG_INFO=1 _BUILD_FOR_DTM_=0 ENABLE_LOG_ROM_=0 HOST_CONFIG=0xC HCI_TL_NONE=1 OSAL_CBTIMER_NUM_TASKS=1 CFG_CP PHY_MCU_TYPE=MCU_BUMBEE_M0 CFG_SLEEP_MODE=PWR_MODE_NO_SLEEP MULTI_DEBUG MAX_NUM_LL_CONN=2 GATT_MAX_NUM_CONN = MAX_NUM_LL_CONN+1 PHY_SLB_OTA_ENABLE</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\..\components\inc;..\..\..\components\ble\host;..\..\..\components\ble\hci;..\..\..\components\ble\controller;..\..\..\components\ble\include;..\..\..\components\osal\include;..\..\..\components\profiles\Roles;..\..\..\components\driver\uart;..\..\..\components\profiles\DevInfo;..\..\..\components\profiles\ota;..\..\..\components\profiles\ota_app;..\..\..\components\profiles\SimpleProfile;..\..\..\components\driver\log;..\..\..\components\driver\pwrmgr;..\..\..\components\driver\uart;..\..\..\components\driver\clock;..\..\..\components\driver\gpio;..\..\..\components\driver\adc;..\..\..\components\driver\kscan;..\..\..\components\driver\flash;..\..\..\components\driver\spi;..\..\..\components\driver\i2c;..\..\..\components\driver\i2s;..\..\..\components\driver\timer;..\..\..\components\driver\watchdog;..\..\..\components\driver\kscan;..\..\..\components\libraries\crc16;..\..\..\components\arch\cm0;..\..\..\lib;..\..\..\misc;.\source\multi_role;..\..\..\components\profiles\multiRole;..\..\..\components\libraries\fs</IncludePath>
+              <IncludePath>..\..\..\components\inc;..\..\..\components\ble\host;..\..\..\components\ble\hci;..\..\..\components\ble\controller;..\..\..\components\ble\include;..\..\..\components\osal\include;..\..\..\components\profiles\Roles;..\..\..\components\driver\uart;..\..\..\components\profiles\DevInfo;..\..\..\components\profiles\ota;..\..\..\components\profiles\ota_app;..\..\..\components\profiles\SimpleProfile;..\..\..\components\driver\log;..\..\..\components\driver\pwrmgr;..\..\..\components\driver\uart;..\..\..\components\driver\clock;..\..\..\components\driver\gpio;..\..\..\components\driver\adc;..\..\..\components\driver\kscan;..\..\..\components\driver\flash;..\..\..\components\driver\spi;..\..\..\components\driver\i2c;..\..\..\components\driver\i2s;..\..\..\components\driver\timer;..\..\..\components\driver\watchdog;..\..\..\components\driver\kscan;..\..\..\components\libraries\crc16;..\..\..\components\arch\cm0;..\..\..\lib;..\..\..\misc;.\source\multi_role;..\..\..\components\profiles\multiRole;..\..\..\components\libraries\fs;..\..\..\components\profiles\ppsp;..\..\..\components\profiles\slb</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -369,7 +369,7 @@
             <ScatterFile>.\scatter_load.sct</ScatterFile>
             <IncludeLibs></IncludeLibs>
             <IncludeLibsPath></IncludeLibsPath>
-            <Misc>..\..\..\misc\bb_rom_sym_m0.txt  --keep=jump_table_base  --keep=global_config</Misc>
+            <Misc>..\..\..\misc\bb_rom_sym_m0.txt  --keep=jump_table_base  --keep=global_config --info=summarystack --info=stack</Misc>
             <LinkerInputFile></LinkerInputFile>
             <DisabledWarnings></DisabledWarnings>
           </LDads>
@@ -430,14 +430,14 @@
               <FilePath>..\..\..\components\driver\flash\flash.c</FilePath>
             </File>
             <File>
-              <FileName>fs.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\components\libraries\fs\fs.c</FilePath>
-            </File>
-            <File>
               <FileName>osal_snv.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\components\osal\snv\osal_snv.c</FilePath>
+            </File>
+            <File>
+              <FileName>watchdog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\driver\watchdog\watchdog.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -479,6 +479,21 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\components\profiles\multiRole\multiRoleProfile.c</FilePath>
             </File>
+            <File>
+              <FileName>ota_app_service.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\profiles\ota_app\ota_app_service.c</FilePath>
+            </File>
+            <File>
+              <FileName>ppsp_serv.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\profiles\ppsp\ppsp_serv.c</FilePath>
+            </File>
+            <File>
+              <FileName>ppsp_impl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\profiles\ppsp\ppsp_impl.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -519,6 +534,11 @@
               <FileType>1</FileType>
               <FilePath>.\source\multi_role\multi_schedule.c</FilePath>
             </File>
+            <File>
+              <FileName>slb_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\profiles\slb\slb_app.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -530,9 +550,97 @@
               <FilePath>..\..\..\lib\rf.lib</FilePath>
             </File>
             <File>
-              <FileName>ble_host_multi5.lib</FileName>
+              <FileName>ble_host.lib</FileName>
               <FileType>4</FileType>
-              <FilePath>..\..\..\lib\ble_host_multi5.lib</FilePath>
+              <FilePath>..\..\..\lib\ble_host.lib</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>fs</GroupName>
+          <Files>
+            <File>
+              <FileName>fs.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\libraries\fs\fs.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>fs2</GroupName>
+          <GroupOption>
+            <CommonProperty>
+              <UseCPPCompiler>0</UseCPPCompiler>
+              <RVCTCodeConst>0</RVCTCodeConst>
+              <RVCTZI>0</RVCTZI>
+              <RVCTOtherData>0</RVCTOtherData>
+              <ModuleSelection>0</ModuleSelection>
+              <IncludeInBuild>0</IncludeInBuild>
+              <AlwaysBuild>2</AlwaysBuild>
+              <GenerateAssemblyFile>2</GenerateAssemblyFile>
+              <AssembleAssemblyFile>2</AssembleAssemblyFile>
+              <PublicsOnly>2</PublicsOnly>
+              <StopOnExitCode>11</StopOnExitCode>
+              <CustomArgument></CustomArgument>
+              <IncludeLibraryModules></IncludeLibraryModules>
+              <ComprImg>1</ComprImg>
+            </CommonProperty>
+            <GroupArmAds>
+              <Cads>
+                <interw>2</interw>
+                <Optim>0</Optim>
+                <oTime>2</oTime>
+                <SplitLS>2</SplitLS>
+                <OneElfS>2</OneElfS>
+                <Strict>2</Strict>
+                <EnumInt>2</EnumInt>
+                <PlainCh>2</PlainCh>
+                <Ropi>2</Ropi>
+                <Rwpi>2</Rwpi>
+                <wLevel>0</wLevel>
+                <uThumb>2</uThumb>
+                <uSurpInc>2</uSurpInc>
+                <uC99>2</uC99>
+                <useXO>2</useXO>
+                <v6Lang>0</v6Lang>
+                <v6LangP>0</v6LangP>
+                <vShortEn>2</vShortEn>
+                <vShortWch>2</vShortWch>
+                <v6Lto>2</v6Lto>
+                <v6WtE>2</v6WtE>
+                <v6Rtti>2</v6Rtti>
+                <VariousControls>
+                  <MiscControls></MiscControls>
+                  <Define></Define>
+                  <Undefine></Undefine>
+                  <IncludePath></IncludePath>
+                </VariousControls>
+              </Cads>
+              <Aads>
+                <interw>2</interw>
+                <Ropi>2</Ropi>
+                <Rwpi>2</Rwpi>
+                <thumb>2</thumb>
+                <SplitLS>2</SplitLS>
+                <SwStkChk>2</SwStkChk>
+                <NoWarn>2</NoWarn>
+                <uSurpInc>2</uSurpInc>
+                <useXO>2</useXO>
+                <uClangAs>2</uClangAs>
+                <VariousControls>
+                  <MiscControls></MiscControls>
+                  <Define></Define>
+                  <Undefine></Undefine>
+                  <IncludePath></IncludePath>
+                </VariousControls>
+              </Aads>
+            </GroupArmAds>
+          </GroupOption>
+          <Files>
+            <File>
+              <FileName>fs.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\libraries\fs2\fs.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -633,16 +741,16 @@
     <files>
       <file attr="config" category="sourceAsm" condition="ARMCC" name="Device\ARM\ARMCM0\Source\ARM\startup_ARMCM0.s" version="1.0.0">
         <instance index="0">RTE\Device\ARMCM0\startup_ARMCM0.s</instance>
-        <component Cclass="Device" Cgroup="Startup" Cvendor="ARM" Cversion="1.0.1" condition="ARMCM0 CMSIS"/>
-        <package name="CMSIS" schemaVersion="1.3" url="http://www.keil.com/pack/" vendor="ARM" version="5.0.0"/>
+        <component Cclass="Device" Cgroup="Startup" Cvendor="ARM" Cversion="1.2.0" condition="ARMCM0 CMSIS"/>
+        <package name="CMSIS" schemaVersion="1.3" url="http://www.keil.com/pack/" vendor="ARM" version="5.6.0"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </file>
       <file attr="config" category="sourceC" name="Device\ARM\ARMCM0\Source\system_ARMCM0.c" version="1.0.0">
         <instance index="0">RTE\Device\ARMCM0\system_ARMCM0.c</instance>
-        <component Cclass="Device" Cgroup="Startup" Cvendor="ARM" Cversion="1.0.1" condition="ARMCM0 CMSIS"/>
-        <package name="CMSIS" schemaVersion="1.3" url="http://www.keil.com/pack/" vendor="ARM" version="5.0.0"/>
+        <component Cclass="Device" Cgroup="Startup" Cvendor="ARM" Cversion="1.2.0" condition="ARMCM0 CMSIS"/>
+        <package name="CMSIS" schemaVersion="1.3" url="http://www.keil.com/pack/" vendor="ARM" version="5.6.0"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>

@@ -56,7 +56,7 @@ UINT16 aligenie_addr = 0xF000;
 
 uint8 vendor_msg_tid=0;
 
-EM_timer_handle thandle;
+EM_timer_handle thandle = EM_TIMER_HANDLE_INIT_VAL;
 
 void timeout_cb (void* args, UINT16 size)
 {
@@ -397,6 +397,10 @@ API_RESULT UI_app_config_server_callback (
         light_blink_set(LIGHT_RED,LIGHT_BLINK_FAST,  3);
         ERROR_PRINT("[ST TimeOut CB]\n");
         UI_prov_state=0;
+        nvs_reset(NVS_BANK_PERSISTENT);
+        BRR_HANDLE handle;
+        handle = 1;
+        MS_brr_remove_bearer(BRR_TYPE_GATT, &handle);
         EM_start_timer (&thandle, 5, timeout_cb, NULL, 0);
         break;
 
@@ -558,6 +562,35 @@ static API_RESULT UI_register_foundation_model_servers
 //    /* Vendor Defined States */
 //    UI_vendor_defined_model_states_initialization();
 //}
+
+API_RESULT UI_get_net_key(void )
+{
+    UINT8   index=0;
+    UINT8   key[16];
+    API_RESULT retval;
+    CONSOLE_OUT("Fetching Net Key for indx 0x0000\n");
+    retval = MS_access_cm_get_netkey_at_offset
+             (
+                 index,
+                 0,
+                 key
+             );
+
+    /* Check Retval. Print Net Key */
+    if (API_SUCCESS == retval)
+    {
+        CONSOLE_OUT("Network Key[0x%02X]: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+                    index, key[0], key[1], key[2], key[3], key[4], key[5], key[6], key[7],
+                    key[8], key[9], key[10], key[11], key[12], key[13], key[14], key[15]);
+    }
+    else
+    {
+        CONSOLE_OUT("FAILED. Reason: 0x%04X\n", retval);
+    }
+
+    return API_SUCCESS;
+}
+
 
 
 API_RESULT UI_get_device_key(void )
@@ -780,6 +813,8 @@ void appl_mesh(void)
     #endif
     /* Initialize utilities */
     nvsto_init(NVS_FLASH_BASE1,NVS_FLASH_BASE2);
+    /* Initialize Mesh config */
+    MS_limit_config();
     /* Initialize Mesh Stack */
     MS_init(config_ptr);
     /* Register with underlying BLE stack */
@@ -900,7 +935,7 @@ void UI_reinit(void)
         */
         UI_setup_prov(role, brr);
         CONSOLE_OUT("\n Setting up as an Unprovisioned Device\n");
-        //LIGHT_ONLY_RED_ON;//¨¦¨¨¡À??a??¨¢¨¢o¨¬¦Ì? change by johhn
+        //LIGHT_ONLY_RED_ON;//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½??a??ï¿½ï¿½ï¿½ï¿½oï¿½ï¿½ï¿½ï¿½? change by johhn
     }
     else
     {

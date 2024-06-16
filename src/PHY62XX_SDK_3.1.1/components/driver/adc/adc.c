@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -50,8 +50,30 @@
 #include "jump_function.h"
 #include "version.h"
 
+#define    GET_IRQ_STATUS         (AP_ADCC->intr_status & 0x0003ffff)
+#define    MAX_ADC_SAMPLE_SIZE     32
+#define    ENABLE_ADC_COMPARE_INT       AP_ADCC->intr_mask |= 0x0003fc00
+#define    MASK_ADC_COMPARE_INT         AP_ADCC->intr_mask &= 0xfffc03ff
+
+
+static uint32_t adc_compare_enable_flag = 0;
+static uint32_t adc_compare_filter_counter = 0;
+
+
+
 static bool mAdc_init_flg = FALSE;
-static adc_Ctx_t mAdc_Ctx;
+
+
+static adc_Ctx_t mAdc_Ctx =
+{
+    .enable = FALSE,
+    .all_channel = 0x00,
+    .chs_en_shadow = 0x00,
+    .continue_mode = FALSE,
+
+    .evt_handler = NULL
+};
+
 static uint8_t  adc_cal_read_flag = 0;
 static uint16_t adc_cal_postive = 0x0fff;
 static uint16_t adc_cal_negtive = 0x0fff;
@@ -68,6 +90,18 @@ gpio_pin_e s_pinmap[ADC_CH_NUM] =
     P20, //ADC_CH3P =7,  ADC_CH3DIFF = 7,
     GPIO_DUMMY,  //ADC_CH_VOICE =8,
 };
+static bool high_threshold_flag = FALSE;
+
+bool adc_get_high_threshold_flag(void)
+{
+    return high_threshold_flag;
+}
+
+
+void adc_set_high_threshold_flag(bool flag)
+{
+    high_threshold_flag = flag;
+}
 
 static void set_sampling_resolution(adc_CH_t channel, bool is_high_resolution,bool is_differential_mode)
 {
@@ -171,8 +205,11 @@ static void disable_analog_pin(adc_CH_t channel)
     hal_gpio_pull_set(pin,GPIO_FLOATING);    //
 }
 
-static void clear_adcc_cfg(void)
+void clear_adcc_cfg(void)
 {
+    mAdc_Ctx.all_channel = 0x00;
+    mAdc_Ctx.chs_en_shadow = 0x00;
+    mAdc_Ctx.continue_mode = FALSE;
     memset(&mAdc_Ctx, 0, sizeof(mAdc_Ctx));
 }
 
@@ -195,7 +232,7 @@ static void clear_adcc_cfg(void)
 void __attribute__((used)) hal_ADC_IRQHandler(void)
 {
     int ch,status,ch2,n;
-    uint16_t adc_data[MAX_ADC_SAMPLE_SIZE];
+    uint16_t adc_data[(MAX_ADC_SAMPLE_SIZE-2)<<1];
     status = GET_IRQ_STATUS;
     MASK_ADC_INT;
 
@@ -207,10 +244,10 @@ void __attribute__((used)) hal_ADC_IRQHandler(void)
             {
                 AP_ADCC->intr_mask &= ~BIT(ch);
 
-                for (n = 0; n < (MAX_ADC_SAMPLE_SIZE-3); n++)
+                for (n = 0; n < (MAX_ADC_SAMPLE_SIZE-2); n++)
                 {
-                    adc_data[n] = (uint16_t)(read_reg(ADC_CH_BASE + (ch * 0x80) + ((n+2) * 4))&0xfff);
-                    adc_data[n+1] = (uint16_t)((read_reg(ADC_CH_BASE + (ch * 0x80) + ((n+2) * 4))>>16)&0xfff);
+                    adc_data[n<<1] = (uint16_t)(read_reg(ADC_CH_BASE + (ch * 0x80) + ((n+2) * 4))&0xfff);
+                    adc_data[(n<<1)+1] = (uint16_t)((read_reg(ADC_CH_BASE + (ch * 0x80) + ((n+2) * 4))>>16)&0xfff);
                 }
 
                 AP_ADCC->intr_clear = BIT(ch);
@@ -226,7 +263,7 @@ void __attribute__((used)) hal_ADC_IRQHandler(void)
                     evt.type = HAL_ADC_EVT_DATA;
                     evt.ch = (adc_CH_t)ch2;
                     evt.data = adc_data;
-                    evt.size = MAX_ADC_SAMPLE_SIZE-3;
+                    evt.size = (MAX_ADC_SAMPLE_SIZE-2)<<1;
                     mAdc_Ctx.evt_handler[ch2](&evt);
                 }
 
@@ -236,7 +273,7 @@ void __attribute__((used)) hal_ADC_IRQHandler(void)
 
         if(mAdc_Ctx.continue_mode == FALSE)
         {
-            hal_adc_stop();
+            hal_poilling_adc_stop();
         }
     }
 
@@ -284,8 +321,7 @@ int hal_adc_clock_config(adc_CLOCK_SEL_t clk)
     subWriteReg(0x4000F000 + 0x7c,2,1,clk);
     return PPlus_SUCCESS;
 }
-
-int hal_adc_start(void)
+int hal_adc_compare_start(void)
 {
     if(!mAdc_init_flg)
     {
@@ -294,12 +330,92 @@ int hal_adc_start(void)
 
     mAdc_Ctx.enable = TRUE;
     hal_pwrmgr_lock(MOD_ADCC);
-    JUMP_FUNCTION(ADCC_IRQ_HANDLER)                  =   (uint32_t)&hal_ADC_IRQHandler;
+    JUMP_FUNCTION(ADCC_IRQ_HANDLER)                  =   (uint32_t)&hal_ADC_compare_IRQHandler;
+    //ENABLE_ADC;
+    AP_PCRM->ANA_CTL |= BIT(3);
+    AP_PCRM->ANA_CTL |= BIT(0);//new
+    NVIC_SetPriority((IRQn_Type)ADCC_IRQn, IRQ_PRIO_HAL);
+    //ADC_IRQ_ENABLE;
+    NVIC_EnableIRQ((IRQn_Type)ADCC_IRQn);
+    //ENABLE_ADC_INT;
+    AP_ADCC->intr_mask = 0x1ff;
+    //disableSleep();
+    return PPlus_SUCCESS;
+}
+
+int hal_adc_start(uint8_t adc_mode)
+{
+    uint8_t     all_channel2 = (((mAdc_Ctx.chs_en_shadow&0x80)>>1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x40)<<1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x20)>>1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x10)<<1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x08)>>1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x04)<<1));
+
+    if(!mAdc_init_flg)
+    {
+        return PPlus_ERR_NOT_REGISTED;
+    }
+
+    mAdc_Ctx.enable = TRUE;
+    hal_pwrmgr_lock(MOD_ADCC);
+    CLEAR_ADC_INT_ALL;
+
+    if( adc_mode == POLLING_MODE )
+        JUMP_FUNCTION(ADCC_IRQ_HANDLER)                  =   0;
+    else if(adc_mode == INTERRUPT_MODE)
+        JUMP_FUNCTION(ADCC_IRQ_HANDLER)                  =   (uint32_t)&hal_ADC_IRQHandler;
+    else
+        JUMP_FUNCTION(ADCC_IRQ_HANDLER)                  =   (uint32_t)&hal_ADC_compare_IRQHandler;
+
+    for(int i=2; i<=7; i++)
+    {
+        if(all_channel2 & (BIT(i)))
+        {
+            switch (i)
+            {
+            case ADC_CH1N_P11:
+                AP_PCRM->ADC_CTL1 |= BIT(20);
+                break;
+
+            case ADC_CH1P_P23:
+                AP_PCRM->ADC_CTL1 |= BIT(4);
+                break;
+
+            case ADC_CH2N_P24:
+                AP_PCRM->ADC_CTL2 |= BIT(20);
+                break;
+
+            case ADC_CH2P_P14:
+                AP_PCRM->ADC_CTL2 |= BIT(4);
+                break;
+
+            case ADC_CH3N_P15:
+                AP_PCRM->ADC_CTL3 |= BIT(20);
+                break;
+
+            case ADC_CH3P_P20:
+                AP_PCRM->ADC_CTL3 |= BIT(4);
+                break;
+            }
+        }
+    }
+
     //ENABLE_ADC;
     AP_PCRM->ANA_CTL |= BIT(3);
     AP_PCRM->ANA_CTL |= BIT(0);//new
     //ADC_IRQ_ENABLE;
-    NVIC_EnableIRQ((IRQn_Type)ADCC_IRQn);
+
+    if( adc_mode == INTERRUPT_MODE || adc_mode == CCOMPARE_MODE)
+    {
+        NVIC_SetPriority((IRQn_Type)ADCC_IRQn, IRQ_PRIO_HAL);
+        NVIC_EnableIRQ((IRQn_Type)ADCC_IRQn);
+    }
+    else
+    {
+        NVIC_DisableIRQ((IRQn_Type)ADCC_IRQn);
+    }
+
     //ENABLE_ADC_INT;
     AP_ADCC->intr_mask = 0x1ff;
     //disableSleep();
@@ -363,6 +479,8 @@ int hal_adc_config_channel(adc_Cfg_t cfg, adc_Hdl_t evt_handler)
         }
     }
 
+    mAdc_Ctx.chs_en_shadow = mAdc_Ctx.all_channel;
+
     if((AP_PCR->SW_CLK & BIT(MOD_ADCC)) == 0)
     {
         hal_clk_gate_enable(MOD_ADCC);
@@ -375,7 +493,7 @@ int hal_adc_config_channel(adc_Cfg_t cfg, adc_Hdl_t evt_handler)
     //ENABLE_DLL;                  //enable DLL
     AP_PCRM->CLKHF_CTL1 |= BIT(7);
     //ADC_DBLE_CLOCK_DISABLE;      //disable double 32M clock,we are now use 32M clock,should enable bit<13>, diable bit<21>
-    AP_PCRM->CLKHF_CTL1 &= ~BIT(21);//check
+    subWriteReg(0x4000F044,21,20,1);    // dig_clk_32M_sel, use dbl_b_32M
     //subWriteReg(0x4000F044,21,20,3);
     //ADC_CLOCK_ENABLE;            //adc clock enbale,always use clk_32M
     AP_PCRM->CLKHF_CTL1 |= BIT(13);
@@ -504,6 +622,12 @@ int hal_adc_config_channel(adc_Cfg_t cfg, adc_Hdl_t evt_handler)
 int hal_adc_stop(void)
 {
     int i;
+    uint8_t     all_channel2 = (((mAdc_Ctx.chs_en_shadow&0x80)>>1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x40)<<1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x20)>>1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x10)<<1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x08)>>1)|\
+                                ((mAdc_Ctx.chs_en_shadow&0x04)<<1));
 
     if(!mAdc_init_flg)
     {
@@ -516,17 +640,49 @@ int hal_adc_stop(void)
     JUMP_FUNCTION(ADCC_IRQ_HANDLER)                  =   0;
     ADC_INIT_TOUT(to);
     AP_ADCC->intr_clear = 0x1FF;
-
-    while(AP_ADCC->intr_status != 0)
-    {
-        ADC_CHECK_TOUT(to, ADC_OP_TIMEOUT, "hal_adc_clear_int_status timeout\n");
-        AP_ADCC->intr_clear = 0x1FF;
-    }
-
     //DISABLE_ADC;
     AP_PCRM->ANA_CTL &= ~BIT(3);
     //ADC_CLOCK_DISABLE;
-    AP_PCRM->CLKHF_CTL1 &= ~BIT(13);
+
+    // AP_PCRM->CLKHF_CTL1 &= ~BIT(13);
+
+    for(i =0; i< ADC_CH_NUM; i++)
+    {
+        if(all_channel2 & BIT(i))
+        {
+            disable_analog_pin((adc_CH_t)i);
+        }
+    }
+
+    AP_PCRM->ANA_CTL &= ~BIT(0);//Power down analog LDO
+    hal_clk_reset(MOD_ADCC);
+    hal_clk_gate_disable(MOD_ADCC);
+    clear_adcc_cfg();
+    //enableSleep();
+    hal_pwrmgr_unlock(MOD_ADCC);
+    return PPlus_SUCCESS;
+}
+
+
+int hal_poilling_adc_stop(void)
+{
+    int i;
+
+    if(!mAdc_init_flg)
+    {
+        return PPlus_ERR_NOT_REGISTED;
+    }
+
+    //MASK_ADC_INT;
+    NVIC_DisableIRQ((IRQn_Type)ADCC_IRQn);
+    AP_ADCC->intr_mask = 0x1ff;
+    JUMP_FUNCTION(ADCC_IRQ_HANDLER)                  =   0;
+    ADC_INIT_TOUT(to);
+    AP_ADCC->intr_clear = 0x1FF;
+    //DISABLE_ADC;
+    AP_PCRM->ANA_CTL &= ~BIT(3);
+    //ADC_CLOCK_DISABLE;
+    // AP_PCRM->CLKHF_CTL1 &= ~BIT(13);
 
     for(i =0; i< ADC_CH_NUM; i++)
     {
@@ -537,10 +693,12 @@ int hal_adc_stop(void)
     }
 
     AP_PCRM->ANA_CTL &= ~BIT(0);//Power down analog LDO
+    hal_clk_reset(MOD_ADCC);
     hal_clk_gate_disable(MOD_ADCC);
     clear_adcc_cfg();
     //enableSleep();
     hal_pwrmgr_unlock(MOD_ADCC);
+    NVIC_ClearPendingIRQ((IRQn_Type)ADCC_IRQn);
     return PPlus_SUCCESS;
 }
 
@@ -653,3 +811,273 @@ float hal_adc_value_cal(adc_CH_t ch,uint16_t* buf, uint32_t size, uint8_t high_r
 
     return result;
 }
+
+void hal_adc_value_read(adc_CH_t ch)
+{
+    volatile uint16_t status;
+    uint8_t ch2;
+    uint16_t adc_data[(MAX_ADC_SAMPLE_SIZE-2)<<1];
+    status = GET_IRQ_STATUS;
+    ch2=(ch%2)?(ch-1):(ch+1);
+
+    while(!(status & BIT(ch2)))
+    {
+        status = GET_IRQ_STATUS;
+    }
+
+    AP_ADCC->intr_mask &= ~BIT(ch2);
+
+    for (uint8_t n = 0; n < (MAX_ADC_SAMPLE_SIZE-2); n++)
+    {
+        adc_data[n<<1] = (uint16_t)(read_reg(ADC_CH_BASE + (ch2 * 0x80) + ((n+2) * 4))&0xfff);
+        adc_data[(n<<1)+1] = (uint16_t)((read_reg(ADC_CH_BASE + (ch2 * 0x80) + ((n+2) * 4))>>16)&0xfff);
+    }
+
+    AP_ADCC->intr_clear = BIT(ch2);
+
+    if (mAdc_Ctx.evt_handler[ch])
+    {
+        adc_Evt_t evt;
+        evt.type = HAL_ADC_EVT_DATA;
+        evt.ch = (adc_CH_t)ch;
+        evt.data = adc_data;
+        evt.size = (MAX_ADC_SAMPLE_SIZE-2)<<1;
+        mAdc_Ctx.evt_handler[ch](&evt);
+    }
+
+    AP_ADCC->intr_mask |= BIT(ch2);
+}
+
+int hal_adc_deinit(void)
+{
+    mAdc_Ctx.enable = FALSE;
+    return hal_pwrmgr_unregister(MOD_ADCC);
+}
+
+
+
+
+/**************************************************************************************
+    @fn          hal_ADC_IRQHandler
+
+    @brief       This function process for adc interrupt
+
+    input parameters
+
+    @param       None.
+
+    output parameters
+
+    @param       None.
+
+    @return      None.
+ **************************************************************************************/
+static void __attribute__((used)) hal_ADC_compare_IRQHandler(void)
+{
+    volatile int ch,status,ch2,n;
+    volatile int status2;
+    uint16_t adc_data[(MAX_ADC_SAMPLE_SIZE-2)<<1];
+    status =  (AP_ADCC->intr_status & 0x0003ffff);
+    MASK_ADC_COMPARE_INT;
+    //AP_ADCC->intr_clear = status;
+    status2 =  (AP_ADCC->intr_status & 0x0003ffff);
+    MASK_ADC_INT;
+
+    if(status & 0x3FC00)
+    {
+        for(n=10; n<17; n++)
+        {
+            if(((status & 0x3FC00) & (1<<n)))//((status & 0x3FF) & (1<<(n-10)))
+            {
+                AP_ADCC->intr_clear =  BIT(n);
+                adc_compare_cb((n-10),status);
+            }
+        }
+
+        AP_ADCC->intr_clear =  0x3FC00;
+    }
+
+    if(status2 == mAdc_Ctx.all_channel)
+    {
+        for (ch = 2; ch <= ADC_CH9; ch++)
+        {
+            if (status2 & BIT(ch))
+            {
+                AP_ADCC->intr_mask &= ~BIT(ch);
+
+                for (n = 0; n < (MAX_ADC_SAMPLE_SIZE-2); n++)
+                {
+                    adc_data[n<<1] = (uint16_t)(read_reg(ADC_CH_BASE + (ch * 0x80) + ((n+2) * 4))&0xfff);
+                    adc_data[(n<<1)+1] = (uint16_t)((read_reg(ADC_CH_BASE + (ch * 0x80) + ((n+2) * 4))>>16)&0xfff);
+                }
+
+                AP_ADCC->intr_clear = BIT(ch);
+
+                if(mAdc_Ctx.enable == FALSE)
+                    continue;
+
+                ch2=(ch%2)?(ch-1):(ch+1);
+
+                if (mAdc_Ctx.evt_handler[ch2])
+                {
+                    adc_Evt_t evt;
+                    evt.type = HAL_ADC_EVT_DATA;
+                    evt.ch = (adc_CH_t)ch2;
+                    evt.data = adc_data;
+                    evt.size = (MAX_ADC_SAMPLE_SIZE-2)<<1;
+                    mAdc_Ctx.evt_handler[ch2](&evt);
+                }
+
+                AP_ADCC->intr_mask |= BIT(ch);
+            }
+        }
+
+        if(mAdc_Ctx.continue_mode == FALSE)
+        {
+            hal_adc_stop();
+        }
+    }
+
+    //ENABLE_ADC_INT;
+    // ENABLE_ADC_COMPARE_INT;
+    AP_ADCC->intr_mask |=  (adc_compare_enable_flag<<10)|0x3ff;
+}
+
+
+static void adc_compare_cb(uint16_t ch,uint32_t status)
+{
+    int32_t delay;
+    uint16_t threshold_low,threshold_high;
+    bool compare_flag = FALSE;
+    uint32_t adc_one_sample_value;
+    uint16_t adc_v1,adc_v2;
+
+    if((ch >= ADC_CH1N_P11) && (ch <=ADC_CH3P_P20))
+    {
+        LOG("compare int:%d 0x%x 0x%x\n",ch,status,AP_ADCC->compare_cfg[ch]);
+        adc_one_sample_value = read_reg(ADC_CH_BASE + (ch * 0x80) + 0x4);
+        adc_v1 = (uint16_t)(adc_one_sample_value&0xfff);
+        adc_v2 = (uint16_t)((adc_one_sample_value>>16)&0xfff);
+        threshold_high = AP_ADCC->compare_cfg[ch] & 0xFFF;
+        threshold_low = (AP_ADCC->compare_cfg[ch] & 0xFFF000)>>12;
+
+        if(AP_ADCC->compare_cfg[ch] & 0x80000000)//high
+        {
+            if((adc_v1 > threshold_high) || (adc_v2 > threshold_high))
+            {
+                compare_flag = TRUE;
+            }
+        }
+        else
+        {
+            if((adc_v1 < threshold_low) || (adc_v2 < threshold_low))
+            {
+                compare_flag = TRUE;
+            }
+        }
+
+        if(compare_flag == TRUE)
+        {
+            LOG("+adc compare int:%d reg:0x%x value:0x%x 0x%x 0x%x l:0x%x h:0x%x\n",ch,AP_ADCC->compare_cfg[ch],adc_one_sample_value,adc_v1,adc_v2,threshold_low,threshold_high);
+            adc_compare_filter_counter++;
+        }
+        else
+        {
+            LOG("-adc compare int:%d reg:0x%x value:0x%x 0x%x 0x%x l:0x%x h:0x%x\n",ch,AP_ADCC->compare_cfg[ch],adc_one_sample_value,adc_v1,adc_v2,threshold_low,threshold_high);
+            adc_compare_filter_counter = 0;
+        }
+
+        if(adc_compare_filter_counter > ADC_COMPARE_FILTER_MAX_TIME)
+        {
+            LOG("adc compare ind:%d,0x%x\n",ch,(AP_ADCC->compare_cfg[ch] & 0x80000000));
+            adc_compare_filter_counter = 0;
+
+            if((AP_ADCC->compare_cfg[ch] & 0x80000000) == 0)//enable high threhold
+            {
+                adc_set_high_threshold_flag(TRUE);
+            }
+        }
+
+        subWriteReg(&(AP_ADCC->compare_cfg[ch]),30,30,0);//compare disable
+        delay=5;
+
+        while(delay--);
+
+        subWriteReg(&(AP_ADCC->compare_cfg[ch]),30,30,1);//compare enable
+        delay=5;
+
+        while(delay--);
+
+        subWriteReg(&(AP_ADCC->compare_reset),ch,ch,1);
+        delay=5;
+
+        while(delay--);
+
+        subWriteReg(&(AP_ADCC->compare_reset),ch,ch,0);
+        delay=5;
+
+        while(delay--);
+    }
+    else
+    {
+        LOG("compare err:%d\n",ch);
+    }
+}
+
+int hal_adc_comppare_reset(adc_CH_t ch)
+{
+    int delay=10;
+    int i=0;
+
+    if((ch >= ADC_CH1N_P11) && (ch <=ADC_CH3P_P20))
+    {
+        i = (ch%2)?(ch-1):(ch+1);
+        subWriteReg(&(AP_ADCC->compare_reset),i,i,1);
+
+        while(delay--);
+
+        //LOG("0x4005001c:0x%x\n",*(volatile int*)(0x4005001c));
+        subWriteReg(&(AP_ADCC->compare_reset),i,i,0);
+        delay=10;
+
+        while(delay--);
+
+        //LOG("0x4005001c:0x%x\n",*(volatile int*)(0x4005001c));
+        return PPlus_SUCCESS;
+    }
+
+    return PPlus_ERR_INVALID_PARAM;
+}
+
+int hal_adc_compare_enable(adc_CH_t ch,uint32_t flag,uint32_t th_high,uint32_t th_low)
+{
+    int i=0;
+
+    if((ch >= ADC_CH1N_P11) && (ch <=ADC_CH3P_P20))
+    {
+        i = (ch%2)?(ch-1):(ch+1);
+        AP_ADCC->compare_cfg[i] = 0;
+        subWriteReg(&(AP_ADCC->compare_cfg[i]),23,12,th_high);//low
+        subWriteReg(&(AP_ADCC->compare_cfg[i]),11,0,th_low);
+
+        if(flag == 0)//low threshold value
+        {
+            subWriteReg(&(AP_ADCC->compare_cfg[i]),31,31,0);
+        }
+        else//high threshold value
+        {
+            subWriteReg(&(AP_ADCC->compare_cfg[i]),31,31,1);
+        }
+
+        subWriteReg(&(AP_ADCC->intr_mask),(i+10),(i+10),0);
+        subWriteReg(&(AP_ADCC->compare_cfg[i]),30,30,1);
+        adc_compare_enable_flag |= (1<<i);
+        LOG("adc_compare_enable_flag:0x%x\n",adc_compare_enable_flag);
+        LOG("i:%d\n",i);
+        LOG("compare reg:0x%x\n",AP_ADCC->compare_cfg[i]);
+        return PPlus_SUCCESS;
+    }
+
+    return PPlus_ERR_INVALID_PARAM;
+}
+

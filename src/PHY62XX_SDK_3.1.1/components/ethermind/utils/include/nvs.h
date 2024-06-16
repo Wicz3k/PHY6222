@@ -45,6 +45,8 @@
 #define NVS_FLASH_SIZE          MS_PS_RECORD_CORE_MODULES_OFFSET
 
 extern UINT32 nvs_flash_base1,nvs_flash_base2;
+extern UINT32 nvs_crc_pos;
+
 
 /* --------------------------------------------- Structures/Data Types */
 
@@ -56,13 +58,15 @@ extern UINT32 nvs_flash_base1,nvs_flash_base2;
 UINT16 nvs_init (UINT8 bank);
 void nvs_shutdown (UINT8 bank);
 void nvs_reset (UINT8 bank);
-INT8 nvs_open (UINT8 bank, UINT8 mode, UINT16 offset);
-INT8 nvs_close (UINT8 bank);
+INT16 nvs_open (UINT8 bank, UINT8 mode, UINT16 offset);
+INT16 nvs_close (UINT8 bank);
 INT16 nvs_write (UINT8 bank, void* buffer, UINT16 size);
 INT16 nvs_read (UINT8 bank, void* buffer, UINT16 size);
 INT16 nvs_seek(UINT8 bank, UINT32 offset);
 INT16 nvs_write_header (UINT8 bank,UINT32 svalue);
 INT16 nvs_read_crc16 (UINT8 bank, UINT16* buffer, UINT16 size);
+INT8 nvs_read_index (UINT8 bank, UINT8* buffer, UINT16 size);
+
 INT16 nvs_erase (UINT8 bank);
 
 

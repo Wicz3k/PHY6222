@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -334,10 +334,12 @@ void ftcase_write_del_test(void)
 
     for(i=0;; i++)
     {
+        uint32_t free_size;
+        hal_fs_get_free_size(&free_size);
         ftst_item.fid = 0xffff;
         fstest_gen_fsdata(&ftst_item, 256, 0xfffe);
 
-        if(ftst_item.fsize > hal_fs_get_free_size())
+        if(ftst_item.fsize > free_size)
         {
             LOG("test end!\n");
             break;
@@ -443,12 +445,14 @@ void ftcase_write_del_and_ble_enable_test(void)
     }
 
     {
+        uint32_t free_size;
         ftst_item.fid = 0xffff;
         fstest_gen_fsdata(&ftst_item, 256, 0xfffe);
+        hal_fs_get_free_size(&free_size);
 
-        if(ftst_item.fsize > hal_fs_get_free_size())
+        if(ftst_item.fsize > free_size)
         {
-            LOG("\nreinit_and_test:%d %d \n",ftst_item.fsize,hal_fs_get_free_size());
+            LOG("\nreinit_and_test:%d %d \n",ftst_item.fsize, free_size);
             firstFlag = true;
             return;
         }
@@ -572,8 +576,8 @@ void fs_example(void)
     {
     case 1://write two files to fs,one is the mix length,one is the max length
     {
+        hal_fs_get_free_size(&free_size);
         LOG("\nfs_write................................................\n");
-        free_size = hal_fs_get_free_size();
         LOG("free_size:%d\n",free_size);
         id = 1;
         id_len = 1;
@@ -607,7 +611,7 @@ void fs_example(void)
                 LOG("write ok\n");
         }
 
-        free_size = hal_fs_get_free_size();
+        hal_fs_get_free_size(&free_size);
         LOG("free_size:%d\n",free_size);
         //while(1);;;;;
         break;
@@ -682,8 +686,10 @@ void fs_example(void)
 
     case 3://delete the two files
     {
+        uint32_t free_size;
+        hal_fs_get_free_size(&free_size);
         LOG("\nfs_delete................................................\n");
-        LOG("free_size:%d\n",hal_fs_get_free_size());
+        LOG("free_size:%d\n", free_size);
         LOG("garbage_size:%d garbage_num:%d\n",hal_fs_get_garbage_size(&garbage_num),garbage_num);
         id = 1;
         ret = hal_fs_item_del(id);
@@ -722,15 +728,18 @@ void fs_example(void)
             }
         }
 
-        LOG("free_size:%d\n",hal_fs_get_free_size());
+        hal_fs_get_free_size(&free_size);
+        LOG("free_size:%d\n", free_size);
         LOG("garbage_size:%d garbage_num:%d\n",hal_fs_get_garbage_size(&garbage_num),garbage_num);
         break;
     }
 
     case 4://garbage collect
     {
+        uint32_t free_size;
+        hal_fs_get_free_size(&free_size);
         LOG("\nfs_garbage_collect................................................\n");
-        LOG("free_size:%d\n",hal_fs_get_free_size());
+        LOG("free_size:%d\n", free_size);
         LOG("garbage_size:%d garbage_num:%d\n",hal_fs_get_garbage_size(&garbage_num),garbage_num);
         ret = hal_fs_garbage_collect();
 
@@ -740,7 +749,8 @@ void fs_example(void)
             FS_HOLD;
         }
 
-        LOG("free_size:%d\n",hal_fs_get_free_size());
+        hal_fs_get_free_size(&free_size);
+        LOG("free_size:%d\n", free_size);
         LOG("garbage_size:%d garbage_num:%d\n",hal_fs_get_garbage_size(&garbage_num),garbage_num);
         break;
     }
@@ -785,7 +795,7 @@ void fs_timing_test(void)
 
     case 1:
         hal_gpio_write(TOGGLE_GPIO,0);
-        hal_flash_write(0x1100500c,data_wr,4);
+        hal_flash_write_by_dma(0x1100500c,data_wr,4);
         hal_gpio_write(TOGGLE_GPIO,1);
         WaitMs(1);
         break;
@@ -1022,7 +1032,7 @@ void fs_xip_test(void)
         AP_GPIO->swporta_dr |= BIT(P11);
         AP_GPIO->swporta_dr &= ~BIT(P11);
         {
-            ret1 = hal_flash_write(sector_addr,p_wr,4096-wr_data_len);
+            ret1 = hal_flash_write_by_dma(sector_addr,p_wr,4096-wr_data_len);
         }
         AP_GPIO->swporta_dr |= BIT(P11);
         AP_GPIO->swporta_dr &= ~BIT(P11);
@@ -1093,11 +1103,11 @@ void fs_xip_test(void)
         {
             if(i==0)
             {
-                ret = hal_flash_write(sector_addr,p_wr,4096-wr_data_len);
+                ret = hal_flash_write_by_dma(sector_addr,p_wr,4096-wr_data_len);
             }
             else
             {
-                ret = hal_flash_write((sector_addr+4096-wr_data_len),p_wr,wr_data_len);
+                ret = hal_flash_write_by_dma((sector_addr+4096-wr_data_len),p_wr,wr_data_len);
             }
 
             FS_RET_RRROR(ret);

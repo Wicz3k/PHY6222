@@ -198,6 +198,8 @@
 #define MS_PROXY_NET_ID_ADV_MODE         0x01
 /** Node Idetity Type */
 #define MS_PROXY_NODE_ID_ADV_MODE        0x02
+/** Node private Type */
+#define MS_PROXY_PRIV_ADV_MODE           0x03
 
 /** \} */
 
@@ -341,6 +343,45 @@ typedef struct _NET_SEQ_NUMBER_STATE
 
 } NET_SEQ_NUMBER_STATE;
 
+/** Proxy NodeID beacon type struct */
+typedef struct _PROXY_BCON_NODEID_DATA
+{
+    /** Hash vaule */
+    UINT8   hash_data[8];
+
+    /** Random Data */
+    UINT8   random_data[8];
+
+    /** mac address */
+    UINT8   addr[6];
+
+} PROXY_BCON_NODEID_DATA;
+
+/** Proxy NodeID beacon type struct */
+typedef struct _PROXY_BCON_NETWORKID_DATA
+{
+    /** Random Data */
+    UINT8   network_id[8];
+
+    /** mac address */
+    UINT8   addr[6];
+
+} PROXY_BCON_NETWORKID_DATA;
+
+
+/** Proxy beacon state parament(nodeid&net id) */
+typedef struct _PROXY_BCON_STATE_PARAMS
+{
+    /** Bcon Type */
+    UCHAR beacon_type;
+
+    /** Data pointer */
+    void* beacon_data;
+
+} PROXY_BCON_STATE_PARAMS;
+
+
+
 /** \} */
 
 /** \} */
@@ -395,6 +436,12 @@ typedef void (*PROXY_NTF_CB)
     UCHAR*               data_param,
     UINT16               data_len
 ) DECL_REENTRANT;
+
+typedef void (*PROXY_BCON_CB)
+(
+    PROXY_BCON_STATE_PARAMS*   data_param
+) DECL_REENTRANT;
+
 /** \} */
 
 /**
@@ -637,6 +684,12 @@ API_RESULT MS_proxy_register
     /* IN */ PROXY_NTF_CB    proxy_cb
 );
 
+API_RESULT MS_proxy_bcon_register
+(
+    /* IN */ PROXY_BCON_CB    proxy_bcon_cb
+);
+
+
 /**
     \brief Check if the Proxy Module is ready to handle Proxy Messages/Events
 
@@ -652,6 +705,9 @@ API_RESULT MS_proxy_register
     \return API_SUCCESS or an error code indicating reason for failure
 */
 API_RESULT MS_proxy_fetch_state (UCHAR* proxy_state);
+
+API_RESULT MS_proxy_bcon_handler_register(void);
+
 
 #ifdef MS_PROXY_CLIENT
 /**
@@ -750,6 +806,9 @@ API_RESULT MS_proxy_server_stop_timer(void);
     \return API_SUCCESS or Error Code on failure
 */
 API_RESULT MS_proxy_server_adv_stop (void);
+
+API_RESULT MS_private_server_adv_stop (void);
+
 #endif /* MS_PROXY_SERVER */
 
 /**

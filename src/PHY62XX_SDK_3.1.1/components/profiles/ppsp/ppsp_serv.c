@@ -23,7 +23,7 @@
 #include "gapbondmgr.h"
 
 #include "ppsp_serv.h"
-#include "ppsp_impl.h"
+// #include "ppsp_impl.h"
 #include "log.h"
 
 
@@ -45,37 +45,37 @@
 
 
 // Simple GATT Profile Service UUID: 0xFFF0
-CONST uint8 __ppsp_serv_serv_uuid[ATT_BT_UUID_SIZE] =
+CONST uint8 ppsp_serv_serv_feb3_uuid[ATT_BT_UUID_SIZE] =
 {
     LO_UINT16(PPSP_SERV_CFGS_SERV_FEB3_UUID), HI_UINT16(PPSP_SERV_CFGS_SERV_FEB3_UUID)
 };
 
 // Characteristic 1 UUID: 0xFFF1
-CONST uint8 __ppsp_serv_char_ffd4_uuid[ATT_BT_UUID_SIZE] =
+CONST uint8 ppsp_serv_char_ffd4_uuid[ATT_BT_UUID_SIZE] =
 {
     LO_UINT16(PPSP_SERV_CFGS_CHAR_FED4_UUID), HI_UINT16(PPSP_SERV_CFGS_CHAR_FED4_UUID)
 };
 
 // Characteristic 2 UUID: 0xFFF2
-CONST uint8 __ppsp_serv_char_ffd5_uuid[ATT_BT_UUID_SIZE] =
+CONST uint8 ppsp_serv_char_ffd5_uuid[ATT_BT_UUID_SIZE] =
 {
     LO_UINT16(PPSP_SERV_CFGS_CHAR_FED5_UUID), HI_UINT16(PPSP_SERV_CFGS_CHAR_FED5_UUID)
 };
 
 // Characteristic 3 UUID: 0xFFF3
-CONST uint8 __ppsp_serv_char_ffd6_uuid[ATT_BT_UUID_SIZE] =
+CONST uint8 ppsp_serv_char_ffd6_uuid[ATT_BT_UUID_SIZE] =
 {
     LO_UINT16(PPSP_SERV_CFGS_CHAR_FED6_UUID), HI_UINT16(PPSP_SERV_CFGS_CHAR_FED6_UUID)
 };
 
 // Characteristic 4 UUID: 0xFFF4
-CONST uint8 __ppsp_serv_char_ffd7_uuid[ATT_BT_UUID_SIZE] =
+CONST uint8 ppsp_serv_char_ffd7_uuid[ATT_BT_UUID_SIZE] =
 {
     LO_UINT16(PPSP_SERV_CFGS_CHAR_FED7_UUID), HI_UINT16(PPSP_SERV_CFGS_CHAR_FED7_UUID)
 };
 
 // Characteristic 5 UUID: 0xFFF5
-CONST uint8 __ppsp_serv_char_ffd8_uuid[ATT_BT_UUID_SIZE] =
+CONST uint8 ppsp_serv_char_ffd8_uuid[ATT_BT_UUID_SIZE] =
 {
     LO_UINT16(PPSP_SERV_CFGS_CHAR_FED8_UUID), HI_UINT16(PPSP_SERV_CFGS_CHAR_FED8_UUID)
 };
@@ -93,7 +93,7 @@ CONST uint8 __ppsp_serv_char_ffd8_uuid[ATT_BT_UUID_SIZE] =
     LOCAL VARIABLES
 */
 
-static ppsp_serv_appl_CBs_t* simpleProfile_AppCBs = NULL;
+static ppsp_serv_appl_hdlr_t* ppsp_serv_appl_hdlr = NULL;
 
 /*********************************************************************
     Profile Attributes - variables
@@ -101,7 +101,7 @@ static ppsp_serv_appl_CBs_t* simpleProfile_AppCBs = NULL;
 
 // Simple Profile Service attribute
 static CONST gattAttrType_t
-__ppsp_serv_serv = { ATT_BT_UUID_SIZE, __ppsp_serv_serv_uuid };
+__ppsp_serv_serv = { ATT_BT_UUID_SIZE, ppsp_serv_serv_feb3_uuid };
 
 
 // Simple Profile Characteristic 1 Properties
@@ -209,7 +209,7 @@ static gattAttribute_t simpleProfileAttrTbl[] =
     },
     // Characteristic Value 1
     {
-        { ATT_BT_UUID_SIZE, __ppsp_serv_char_ffd4_uuid },
+        { ATT_BT_UUID_SIZE, ppsp_serv_char_ffd4_uuid },
         GATT_PERMIT_READ | GATT_PERMIT_WRITE,
         0,
         __ppsp_serv_char_ffd4_para
@@ -231,7 +231,7 @@ static gattAttribute_t simpleProfileAttrTbl[] =
     },
     // Characteristic Value 2
     {
-        { ATT_BT_UUID_SIZE, __ppsp_serv_char_ffd5_uuid },
+        { ATT_BT_UUID_SIZE, ppsp_serv_char_ffd5_uuid },
         GATT_PERMIT_READ | GATT_PERMIT_WRITE,
         0,
         __ppsp_serv_char_ffd5_para
@@ -253,7 +253,7 @@ static gattAttribute_t simpleProfileAttrTbl[] =
     },
     // Characteristic Value 3
     {
-        { ATT_BT_UUID_SIZE, __ppsp_serv_char_ffd6_uuid },
+        { ATT_BT_UUID_SIZE, ppsp_serv_char_ffd6_uuid },
         GATT_PERMIT_READ | GATT_PERMIT_WRITE,
         0,
         __ppsp_serv_char_ffd6_para
@@ -282,7 +282,7 @@ static gattAttribute_t simpleProfileAttrTbl[] =
     },
     // Characteristic Value 4
     {
-        { ATT_BT_UUID_SIZE, __ppsp_serv_char_ffd7_uuid },
+        { ATT_BT_UUID_SIZE, ppsp_serv_char_ffd7_uuid },
         GATT_PERMIT_READ | GATT_PERMIT_WRITE,
         0,
         __ppsp_serv_char_ffd7_para
@@ -304,7 +304,7 @@ static gattAttribute_t simpleProfileAttrTbl[] =
     },
     // Characteristic Value 5
     {
-        { ATT_BT_UUID_SIZE, __ppsp_serv_char_ffd8_uuid },
+        { ATT_BT_UUID_SIZE, ppsp_serv_char_ffd8_uuid },
         GATT_PERMIT_READ | GATT_PERMIT_WRITE,
         0,
         __ppsp_serv_char_ffd8_para
@@ -329,7 +329,7 @@ static gattAttribute_t simpleProfileAttrTbl[] =
 /*********************************************************************
     LOCAL FUNCTIONS
 */
-static uint8
+static bStatus_t
 ppsp_serv_get_attr( uint16 connHandle, gattAttribute_t* pAttr,
                     uint8* pValue, uint16* pLen, uint16 offset, uint8 maxLen );
 static bStatus_t
@@ -357,8 +357,8 @@ ppsp_serv_hdlr_conn_stat( uint16 connHandle, uint8 changeType );
 
     @return      Success or Failure
 */
-static uint8 ppsp_serv_get_attr( uint16 connHandle, gattAttribute_t* pAttr,
-                                 uint8* pValue, uint16* pLen, uint16 offset, uint8 maxLen )
+static bStatus_t ppsp_serv_get_attr( uint16 connHandle, gattAttribute_t* pAttr,
+                                     uint8* pValue, uint16* pLen, uint16 offset, uint8 maxLen )
 {
     bStatus_t status = SUCCESS;
 
@@ -604,10 +604,10 @@ static bStatus_t ppsp_serv_set_attr( uint16 connHandle, gattAttribute_t* pAttr,
 
     // If a charactersitic value changed then callback function to notify application of change
     if ( upda_para != 0xFF &&
-            NULL != simpleProfile_AppCBs &&
-            NULL != simpleProfile_AppCBs->char_upda )
+            NULL != ppsp_serv_appl_hdlr &&
+            NULL != ppsp_serv_appl_hdlr->ppsp_serv_char_upda_hdlr )
     {
-        simpleProfile_AppCBs->char_upda( upda_para, len );
+        ppsp_serv_appl_hdlr->ppsp_serv_char_upda_hdlr( upda_para, pAttr->pValue, len );
     }
 
     return ( status );
@@ -636,7 +636,7 @@ static void ppsp_serv_hdlr_conn_stat( uint16 conn_hdle, uint8 chng_type )
             // __ppsp_impl_update_cnt = 0;
             GATTServApp_InitCharCfg( conn_hdle, __ppsp_serv_char_ffd6_cfgs );
             GATTServApp_InitCharCfg( conn_hdle, __ppsp_serv_char_ffd8_cfgs );
-            ppsp_impl_ack_conn(0);  // ack upper impl loss of connection
+            // ppsp_impl_ack_conn(0);  // ack upper impl loss of connection
         }
     }
 }
@@ -702,16 +702,16 @@ bStatus_t ppsp_serv_add_serv(uint32 serv)
 
     @return  SUCCESS or bleAlreadyInRequestedMode
 */
-bStatus_t ppsp_serv_reg_appl( ppsp_serv_appl_CBs_t* appCallbacks )
+bStatus_t ppsp_serv_reg_appl( ppsp_serv_appl_hdlr_t* hdlr )
 {
-    if ( appCallbacks )
+    if ( hdlr )
     {
-        simpleProfile_AppCBs = appCallbacks;
+        ppsp_serv_appl_hdlr = hdlr;
         return ( SUCCESS );
     }
     else
     {
-        return ( bleAlreadyInRequestedMode );
+        return ( FAILURE );
     }
 }
 
@@ -730,7 +730,7 @@ bStatus_t ppsp_serv_reg_appl( ppsp_serv_appl_CBs_t* appCallbacks )
 
     @return  bStatus_t
 */
-bStatus_t ppsp_serv_set_para( uint8 para, uint16 leng, void* valu )
+bStatus_t ppsp_serv_set_para( uint8 para, void* valu, uint16 leng )
 {
     // LOG("[PANDA][ENT] %s: para:%d, leng:%d, valu:%x \n\r", __func__, para, leng, valu);
     // LOG("\r\n[DUMP] >> "); for ( int itr0 = 0; itr0 < leng; itr0 += 1 ) LOG("%02x,", ((uint8*)valu)[itr0]); LOG("[DUMP] << \r\n");
@@ -742,7 +742,8 @@ bStatus_t ppsp_serv_set_para( uint8 para, uint16 leng, void* valu )
     {
         if ( leng <= PPSP_SERV_CFGS_CHAR_FED4_DLEN )
         {
-            osal_memcpy(__ppsp_serv_char_ffd4_para, valu, __ppsp_serv_char_ffd4_para_size = leng);
+            __ppsp_serv_char_ffd4_para_size = leng;
+            osal_memcpy(__ppsp_serv_char_ffd4_para, valu, __ppsp_serv_char_ffd4_para_size);
         }
         else
         {

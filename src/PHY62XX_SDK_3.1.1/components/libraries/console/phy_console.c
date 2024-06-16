@@ -270,15 +270,17 @@ void console_rx_handler(uart_Evt_t* pev)
     }
 }
 
-int console_init(const cons_cmd_t* cmdlist, cons_callback_t callback)
+int console_init(UART_INDEX_e port, int boardrate,
+                 gpio_pin_e tx, gpio_pin_e rx,
+                 const cons_cmd_t* cmdlist, cons_callback_t callback)
 {
     uart_Cfg_t cfg =
     {
-        .tx_pin = P9,
-        .rx_pin = P10,
+        .tx_pin = tx,
+        .rx_pin = rx,
         .rts_pin = GPIO_DUMMY,
         .cts_pin = GPIO_DUMMY,
-        .baudrate = 115200,
+        .baudrate = boardrate,
         .use_fifo = TRUE,
         .hw_fwctrl = FALSE,
         .use_tx_buf = FALSE,
@@ -290,7 +292,7 @@ int console_init(const cons_cmd_t* cmdlist, cons_callback_t callback)
         return PPlus_ERR_INVALID_PARAM;
 
     hal_pwrmgr_register(MOD_CONSOLE, console_sleep_handler, console_wakeup_handler);
-    hal_uart_init(cfg,UART0);//uart init
+    hal_uart_init(cfg, port);//uart init
     s_cons_ctx.cmd_list = cmdlist;
     s_cons_ctx.state = CONS_ST_IDLE;
     s_cons_ctx.rx_cnt = 0;

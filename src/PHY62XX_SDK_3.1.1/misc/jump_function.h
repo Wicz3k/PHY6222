@@ -259,6 +259,8 @@
 #define     LL_PROCESSBASICIRQ_SCANTRX           162
 #define     LL_PROCESSBASICIRQ_SECSCANSRX        163
 #define     LL_PROCESSBASICIRQ_SECINITSRX        164
+#define     LL_PROCESSBASICIRQ_SECADVSTX         165
+#define     LL_PROCESSBASICIRQ_SECSCANTRX        166
 
 // 2020-02-13 Add for CTE
 #define LL_CONNLESS_CTE_TX_PARAM                203
@@ -277,7 +279,7 @@
 #define     HAL_DRV_IRQ_DISABLE                  214
 
 #define     HAL_WATCHDOG_INIT                    215
-
+#define     HAL_SYS_CLK_CHG_PROC                 216
 // interrupt request handler
 #define     NMI_HANDLER                          219
 #define     HARDFAULT_HANDLER                    220

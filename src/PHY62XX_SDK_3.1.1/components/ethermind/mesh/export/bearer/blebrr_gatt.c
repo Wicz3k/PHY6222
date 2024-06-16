@@ -1,4 +1,4 @@
-
+﻿
 /**
     \file blebrr_gatt.c
 
@@ -15,6 +15,7 @@
 #include "MS_brr_api.h"
 #include "MS_prov_api.h"
 #include "blebrr.h"
+#include "MS_net_api.h"
 
 /* --------------------------------------------- External Global Variables */
 
@@ -70,7 +71,11 @@ void blebrr_gatt_mode_set(UCHAR flag)
     blebrr_gatt_mode = ((flag == BLEBRR_GATT_PROV_MODE) || (flag == BLEBRR_GATT_PROXY_MODE))?
                        flag: 0xFF;
     /* Notify GATT mode setting to blebrr pl */
+    #if (CFG_MESH_FAST_PRO)
+    #elif defined BLE_CLIENT_ROLE
+    #else
     blebrr_set_gattmode_pl (blebrr_gatt_mode);
+    #endif
 }
 
 /**
@@ -192,7 +197,11 @@ API_RESULT blebrr_pl_gatt_connection
     blebrr_gatt.binfo = &buffer;
     buffer.payload = (UCHAR*)&blebrr_gatt_ch_info;
     buffer.length = sizeof(blebrr_gatt_ch_info);
-    retval = MS_brr_add_bearer(BRR_TYPE_GATT, &blebrr_gatt, handle);
+
+    if(mode == BLEBRR_GATT_PROXY_MODE)
+        retval = MS_brr_add_bearer(BRR_TYPE_GATT, &blebrr_gatt, handle);
+    else
+        retval = MS_brr_add_bearer(BRR_TYPE_PB_GATT, &blebrr_gatt, handle);
 
     /* Check the PDU type received and Add bearer to Mesh stack */
     if (BLEBRR_SERVER_ROLE == role)
@@ -201,6 +210,8 @@ API_RESULT blebrr_pl_gatt_connection
 
         if (BLEBRR_GATT_PROXY_MODE == mode)
         {
+            /* Send Secure Network Beacons */
+            MS_net_broadcast_secure_beacon(0x0000);
             /* Start observing */
             blebrr_scan_enable();
         }

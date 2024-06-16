@@ -1,4 +1,4 @@
-
+﻿
 /**
     \file MS_common.h
 
@@ -761,6 +761,17 @@
 /* Secure Network Beacon Type */
 #define MS_BCON_TYPE_SECURE          0x01
 
+/* Proxy NetID Beacon Type */
+#define MS_BCON_TYPE_PROXY_NETID     0x02
+
+/* Proxy NodeID Beacon Type */
+#define MS_BCON_TYPE_PROXY_NODEID    0x03
+
+
+/* Secure Network Beacon Type */
+#define MS_BCON_TYPE_SECURE          0x01
+
+
 /** Friend Role */
 /* Invalid */
 #define MS_FRND_ROLE_INVALID   0x00
@@ -1026,6 +1037,9 @@ API_RESULT ms_internal_verificaiton_check(void);
 /**
     \endcond
 */
+
+void MS_limit_config(void);
+
 
 #ifdef __cplusplus
 };

@@ -1,4 +1,4 @@
-/**
+﻿/**
     \file appl_scheduler_server.c
 */
 
@@ -11,7 +11,7 @@
 
 /* --------------------------------------------- Header File Inclusion */
 #include "appl_scheduler_server.h"
-#include "appl_model_state_handler.h"
+#include "appl_scheduler_state_handler.h"
 
 
 /* --------------------------------------------- Global Definitions */
@@ -64,7 +64,7 @@ void main_scheduler_server_operations(/* IN */ UINT8 have_menu)
             CONSOLE_OUT(
                 "Scheduler Setup Server Initialized. Model Handle: 0x%04X\n",
                 appl_scheduler_setup_server_model_handle);
-            appl_model_states_initialization();
+            appl_scheduler_states_initialization();
         }
         else
         {
@@ -107,7 +107,7 @@ void main_scheduler_server_operations(/* IN */ UINT8 have_menu)
     }
 }
 
-#if 0
+#if 1
 /**
     \brief Server Application Asynchronous Notification Callback.
 
@@ -151,7 +151,7 @@ API_RESULT appl_scheduler_server_cb
             param_p = state_params->state;
         }
 
-        appl_model_state_get(state_params->state_type, 0, param_p, 0);
+        appl_scheduler_state_get(state_params->state_type, 0, param_p, 0);
         current_state_params.state_type = state_params->state_type;
         current_state_params.state = param_p;
     }
@@ -159,7 +159,7 @@ API_RESULT appl_scheduler_server_cb
     {
         CONSOLE_OUT(
             "[SCHEDULER_SETUP] SET Request.\n");
-        appl_model_state_set(state_params->state_type, 0, state_params->state, 0);
+        appl_scheduler_state_set(state_params->state_type, 0, state_params->state, 0);
         current_state_params.state_type = state_params->state_type;
         current_state_params.state = state_params->state;
     }
@@ -168,7 +168,7 @@ API_RESULT appl_scheduler_server_cb
     if (0x01 == req_type->to_be_acked)
     {
         CONSOLE_OUT(
-            "[SCHEDULER] Sending Response.\n");
+            "[SCHEDULER] Sending Response.%x\n",ctx->saddr);
         /* Parameters: Request Context, Current State, Target State (NULL: to be ignored), Remaining Time (0: to be ignored), Additional Parameters (NULL: to be ignored) */
         retval = MS_scheduler_server_state_update(ctx, &current_state_params, NULL, 0, NULL);
     }

@@ -116,6 +116,9 @@ extern "C" {
 #define    PWM_GET_TOP_VAL(n)           AP_PWM_CTRL(n)->ctrl1 & 0x0000FFFF
 
 
+#define    PWM_ENABLE_CH_BASE           12
+
+
 /*************************************************************
     @brief      enum variable, the number of PWM channels supported
 
@@ -165,6 +168,20 @@ typedef enum
     PWM_POLARITY_RISING = 0,
     PWM_POLARITY_FALLING = 1
 } PWM_POLARITY_e;
+
+
+typedef struct
+{
+    uint8_t         dead_ratio;
+    PWMN_e          pwmN[2];
+    gpio_pin_e      pwmPin[2];
+    PWM_CLK_DIV_e   pwmDiv;
+    PWM_CNT_MODE_e  pwmMode;
+    PWM_POLARITY_e  pwmPolarity[2];
+    uint16_t        cmpVal;
+    uint16_t        cntTopVal;
+} pwm_complement_deadzone_cfg_t;
+
 
 /**************************************************************************************
     @fn          hal_pwm_init
@@ -374,6 +391,42 @@ void hal_pwm_ch_start(pwm_ch_t ch);
     @return      None.
  **************************************************************************************/
 void hal_pwm_ch_stop(pwm_ch_t ch);
+
+
+/**************************************************************************************
+    @fn          pwm_complement_start
+
+    @brief       config and start complement pwm channel
+
+    input parameters
+
+    @param       pwm_complement_deadzone_cfg_t pwm_cfg : complement pwm channel
+
+    output parameters
+
+    @param       None.
+
+    @return      None.
+ **************************************************************************************/
+void pwm_complement_start(pwm_complement_deadzone_cfg_t pwm_cfg);
+
+
+/**************************************************************************************
+    @fn          pwm_deadzone_start
+
+    @brief       config and start deadzone pwm channel
+
+    input parameters
+
+    @param       pwm_complement_deadzone_cfg_t pwm_cfg : deadzone pwm channel
+
+    output parameters
+
+    @param       None.
+
+    @return      None.
+ **************************************************************************************/
+void pwm_deadzone_start(pwm_complement_deadzone_cfg_t pwm_cfg);
 
 #ifdef __cplusplus
 }

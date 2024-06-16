@@ -1,4 +1,4 @@
-
+﻿
 /**
     \file appl_sample_example_7.c
 
@@ -208,7 +208,7 @@ void UI_set_publish_address(UINT16 addr, MS_ACCESS_MODEL_HANDLE model_handle)
     /* Set Publish Information */
     EM_mem_set(&publish_info, 0, sizeof(publish_info));
     publish_info.addr.use_label = MS_FALSE;
-    publish_info.appkey_index = MS_CONFIG_LIMITS(MS_MAX_APPS);
+    publish_info.appkey_index = ms_max_apps;
     publish_info.remote = MS_FALSE;
     publish_info.addr.addr = addr;
     retval = MS_access_cm_set_model_publication

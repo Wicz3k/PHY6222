@@ -74,20 +74,20 @@
 */
 
 // The order in this table must be identical to the task initialization calls below in osalInitTask.
-const pTaskEventHandlerFn tasksArr[] =
+__ATTR_SECTION_SRAM__ const pTaskEventHandlerFn tasksArr[] =
 {
     LL_ProcessEvent,
     HCI_ProcessEvent,
     L2CAP_ProcessEvent,
     GAP_ProcessEvent,
     GATT_ProcessEvent,
-    SM_ProcessEvent,
+//    SM_ProcessEvent,
     GAPRole_ProcessEvent,
     GATTServApp_ProcessEvent,
     otaApp_ProcessEvent
 };
 
-const uint8 tasksCnt = sizeof(tasksArr) / sizeof(tasksArr[0]);
+__ATTR_SECTION_SRAM__ const uint8 tasksCnt = sizeof(tasksArr) / sizeof(tasksArr[0]);
 uint16* tasksEvents;
 
 /*********************************************************************
@@ -119,7 +119,7 @@ void osalInitTasks(void)
     /* GATT Task */
     GATT_Init(taskID++);
     /* SM Task */
-    SM_Init(taskID++);
+//    SM_Init(taskID++);
     /* Profiles */
     GAPRole_Init(taskID++);
     GATTServApp_Init(taskID++);

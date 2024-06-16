@@ -45,7 +45,9 @@ extern "C" {
 //#define __Vendor_SysTickConfig    0U        /* Set to 1 if different SysTick Config is used */
 
 #include "core_cm0.h"                       /* Processor and core peripherals */
+#if   defined ( __CC_ARM )
 #include "system_ARMCM0.h"                  /* System Header */
+#endif /*__CC_ARM*/
 
 #define NVIC_GetPendingIRQs()       (NVIC->ISPR[0U])
 #define NVIC_ClearPendingIRQs(icpr) (NVIC->ICPR[0U] = (unsigned int)icpr)

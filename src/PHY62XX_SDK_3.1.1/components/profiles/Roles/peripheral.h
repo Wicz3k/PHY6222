@@ -45,9 +45,6 @@
 #ifndef PERIPHERAL_H
 #define PERIPHERAL_H
 
-#ifdef EXT_ADV_ENABLE
-    #include "rflib_LR.h"
-#endif
 
 #ifdef __cplusplus
 extern "C"
@@ -96,15 +93,51 @@ extern "C"
 #define GAPROLE_CONNECTION_INTERVAL  0x31B
 #define GAPROLE_CONNECTION_LATENCY 0x31C
 
-#ifdef EXT_ADV_ENABLE
-#define GAPROLE_EXT_ADVERT_ENABLED      0x0320
-#define GAPROLE_EXT_ADVERT_DATA         0x0321
-#define GAPROLE_EXT_SCAN_RSP_DATA       0x0322
-#define GAPROLE_EXT_ADV_EVENT_TYPE      0x0323
-#endif
 
 /** @} End GAPROLE_PROFILE_PARAMETERS */
 
+#define GAP_EXTADV_PROP_NONCONN_NONSCAN          0
+#define GAP_EXTADV_PROP_CONNECTABLE_NONSCAN      0x1
+#define GAP_EXTADV_PROP_NONCONN_SCANNABLE        0x2
+#define GAP_EXTADV_PROP_LDC_CONNECTABLE          0x5
+#define GAP_EXTADV_PROP_LEGACY_ADV_IND           LL_EXT_ADV_PROP_ADV_IND
+#define GAP_EXTADV_PROP_LEGACY_LDC_ADV           LL_EXT_ADV_PROP_ADV_LDC_ADV
+#define GAP_EXTADV_PROP_LEGACY_HDC_ADV           LL_EXT_ADV_PROP_ADV_HDC_ADV
+#define GAP_EXTADV_PROP_LEGACY_SCAN_IND          LL_EXT_ADV_PROP_ADV_SCAN_IND
+#define GAP_EXTADV_PROP_LEGACY_NOCONN_IND        LL_EXT_ADV_PROP_ADV_NOCONN_IND
+
+typedef enum
+{
+    GAP_ADV_SET_CFG_START = 0x350,
+    GAP_ADV_SID           = 0x350,
+    GAP_ADV_EVENT_PROP,
+    GAP_PRI_CHN_ADV_INT_MIN,
+    GAP_PRI_CHN_ADV_INT_MAX,
+    GAP_PRI_CHN_ADV_CHNMAP,
+    GAP_OWN_ADDR_TYPE,
+    GAP_OWN_RANDOM_ADDR,
+    GAP_PEER_ADDR_TYPE,
+    GAP_PEER_ADDR,
+    GAP_WL_POLICY,
+    GAP_PRI_ADV_PHY,
+    GAP_SEC_ADV_PHY,
+    GAP_SEC_ADV_MAX_SKIP,
+    GAP_SCANREQ_NOTI_ENABLE,
+    GAP_EXT_ADV_DURATION,
+    GAP_EXT_ADV_MAX_EVT,
+    GAP_EXT_ADV_TX_PWR,
+    GAP_EXT_ADV_DATA,
+    GAP_EXT_SCAN_RSP_DATA,
+    GAP_ADV_SET_MAX_ENUM
+} GAP_AdvSetConfig_e;
+
+typedef enum
+{
+    GAP_ADV_PHY_NONE      = 0x00,                // applicable to secondary PHY conf only
+    GAP_ADV_PHY_1MBPS     = 0x01,                // applicable to both primary & secondary PHY conf
+    GAP_ADV_PHY_2MBPS     = 0x02,                // applicable to secondary PHY conf only
+    GAP_ADV_PHY_CODED     = 0x03                 // applicable to both primary & secondary PHY conf
+} GAP_ExtAdv_PHY_e;
 /*  -------------------------------------------------------------------
     TYPEDEFS
 */
@@ -173,21 +206,7 @@ typedef struct
 /*  -------------------------------------------------------------------
     API FUNCTIONS
 */
-#ifdef EXT_ADV_ENABLE
-// extended advertising
-typedef unsigned int uintptr_t;
-typedef void (*pfnGapCB_t)
-(
-    uint32_t event,   //!< see @ref GapAdvScan_Event_IDs and GapAdvScan_Event_IDs
-    void* pBuf,       //!< data potentially accompanying event
-    uintptr_t arg     //!< custom application argument that can be return through this callback
-);
-typedef enum
-{
-    GAP_ADV_DATA_TYPE_ADV,        //!< Advertising data
-    GAP_ADV_DATA_TYPE_SCAN_RSP    //!< Scan response data
-} GapAdv_dataTypes_t;
-#endif
+
 /**
     @defgroup GAPROLES_PERIPHERAL_API GAP Peripheral Role API Functions
 
@@ -229,11 +248,6 @@ extern bStatus_t GAPRole_SetParameter( uint16 param, uint8 len, void* pValue );
     @return      SUCCESS or INVALIDPARAMETER (invalid paramID)
 */
 extern bStatus_t GAPRole_GetParameter( uint16 param, void* pValue );
-#ifdef EXT_ADV_ENABLE
-extern bStatus_t GapRoleAdv_loadByHandle(uint8 handle, GapAdv_dataTypes_t dataType,
-                                         uint16 len, uint8* pBuf);
-
-#endif
 
 /**
     @brief       Does the device initialization.  Only call this function once.
@@ -317,111 +331,16 @@ extern uint16 GAPRole_ProcessEvent( uint8 task_id, uint16 events );
 
 /*  -------------------------------------------------------------------
     -------------------------------------------------------------------*/
-#ifdef EXT_ADV_ENABLE
-extern bStatus_t GAP_UpdateExtAdvertisingData( uint8 taskID, uint16_t adType,
-                                               uint8 dataLen, uint8* pAdvertData );
+
+extern bStatus_t GAPRole_extAdv_ConfigAdvSet( uint8 adv_handle );
+extern bStatus_t GAPRole_extAdv_EnableAdvSet( uint8 adv_handle );
+extern bStatus_t GAPRole_extAdv_DisableAdvSet( uint8 adv_handle );
+extern bStatus_t GAPRole_extAdv_SetRandomAddress( uint8 adv_handle, uint8* random_address);
+extern bStatus_t GAPRole_extAdv_RemoveAdvSet( uint8 adv_handle);
+extern bStatus_t GAPRole_extAdv_SetParameter( uint8 adv_handler, uint16 param, uint16 len, void* pValue );
+extern bStatus_t GAPRole_extAdv_GetParameter( uint8 adv_handler, uint16 param, void* pValue );
 
 
-
-
-
-/**
-    GAP Advertiser bitfields to enable / disable callback events
-
-    These are used in @ref GapAdv_setEventMask
-    The events that that these flags control are defined in
-    @ref GapAdvScan_Event_IDs
-*/
-// Advertising Scan Request Notification Flag
-#define AE_NOTIFY_DISABLE_SCAN_REQUEST                      ~BV(0)
-#define AE_NOTIFY_ENABLE_SCAN_REQUEST                        BV(0)
-#define AE_NOTIFY
-#define AE_NOTIFY_DISABLE_ADV_SET_START                     ~BV(4)
-#define AE_NOTIFY_ENABLE_ADV_SET_START                       BV(4)
-#define AE_NOTIFY_DISABLE_ADV_START                         ~BV(5)
-#define AE_NOTIFY_ENABLE_ADV_START                           BV(5)
-#define AE_NOTIFY_DISABLE_ADV_END                           ~BV(6)
-#define AE_NOTIFY_ENABLE_ADV_END                             BV(6)
-#define AE_NOTIFY_DISABLE_ADV_SET_END                       ~BV(7)
-#define AE_NOTIFY_ENABLE_ADV_SET_END                         BV(7)
-
-typedef enum
-{
-    /**
-        Enables / disables the @ref GAP_EVT_SCAN_REQ_RECEIVED event
-    */
-    GAP_ADV_EVT_MASK_SCAN_REQ_NOTI       = AE_NOTIFY_ENABLE_SCAN_REQUEST,
-    /**
-        Enables / disables the @ref GAP_EVT_ADV_SET_TERMINATED event
-    */
-    GAP_ADV_EVT_MASK_SET_TERMINATED      = BV(1),
-    /**
-        Enables / disables the @ref GAP_EVT_ADV_START_AFTER_ENABLE event
-    */
-    GAP_ADV_EVT_MASK_START_AFTER_ENABLE  = AE_NOTIFY_ENABLE_ADV_SET_START,
-    /**
-        Enables / disables the @ref GAP_EVT_ADV_START event
-    */
-    GAP_ADV_EVT_MASK_START               = AE_NOTIFY_ENABLE_ADV_START,
-    /**
-        Enables / disables the @ref GAP_EVT_ADV_END event
-    */
-    GAP_ADV_EVT_MASK_END                 = AE_NOTIFY_ENABLE_ADV_END,
-    /**
-        Enables / disables the @ref GAP_EVT_ADV_END_AFTER_DISABLE event
-    */
-    GAP_ADV_EVT_MASK_END_AFTER_DISABLE   = AE_NOTIFY_ENABLE_ADV_SET_END,
-    /**
-        Mask to enables / disable all advertising events
-    */
-    GAP_ADV_EVT_MASK_ALL                 = GAP_ADV_EVT_MASK_SCAN_REQ_NOTI |
-                                           GAP_ADV_EVT_MASK_START_AFTER_ENABLE |
-                                           GAP_ADV_EVT_MASK_START |
-                                           GAP_ADV_EVT_MASK_END |
-                                           GAP_ADV_EVT_MASK_END_AFTER_DISABLE |
-                                           GAP_ADV_EVT_MASK_SET_TERMINATED,
-/// @cond NODOC
-    /**
-        Used to set this to 16 bits for future events
-    */
-    GAP_ADV_EVT_MASK_RESERVED            = BV(15)
-/// @endcond // NODOC
-} GapAdv_eventMaskFlags_t;
-
-/// Enable options for @ref GapAdv_enable
-typedef enum
-{
-    /**
-        Use the maximum possible value. This is the spec-defined maximum for
-        directed advertising and infinite advertising for all other types
-    */
-    GAP_ADV_ENABLE_OPTIONS_USE_MAX,
-    /**
-        Use the user-specified duration
-    */
-    GAP_ADV_ENABLE_OPTIONS_USE_DURATION,
-    /**
-        Use the user-specified maximum number of events
-    */
-    GAP_ADV_ENABLE_OPTIONS_USE_MAX_EVENTS,
-} GapAdv_enableOptions_t;
-
-
-
-extern bStatus_t GapAdv_create(pfnGapCB_t* cb, Gap_ExtAdv_Param* advParam,
-                               uint8* advHandle);
-
-bStatus_t GapAdv_loadByHandle(uint8 handle, GapAdv_dataTypes_t dataType,
-                              uint16 len, uint8* pBuf);
-
-extern bStatus_t GapAdv_setEventMask(uint8 handle, GapAdv_eventMaskFlags_t mask);
-
-extern bStatus_t GapAdv_enable(uint8 handle,
-                               GapAdv_enableOptions_t enableOptions,
-                               uint16 durationOrMaxEvents);
-
-extern bStatus_t GapAdv_UpdateParameter(uint8* pBuf);
-#endif
 
 #ifdef __cplusplus
 }

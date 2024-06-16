@@ -55,7 +55,7 @@ DECL_STATIC uint8 UI_prov_state=ALIG_UN_PROV;
 
 void UI_prov_cb_PROVISIONING_SETUP(PROV_HANDLE* phandle,UCHAR event_type,API_RESULT event_result,void* event_data,UINT16 event_datalen)
 {
-    //LIGHT_ONLY_BLUE_ON;?'l??è?
+    //LIGHT_ONLY_BLUE_ON;?'l??ï¿½?
     UI_prov_state=ALIG_IN_PROV;
 }
 void UI_prov_cb_OOB_DISPLAY(PROV_HANDLE* phandle,UCHAR event_type,API_RESULT event_result,void* event_data,UINT16 event_datalen)
@@ -164,8 +164,11 @@ void UI_prov_cb_PROVISIONING_COMPLETE(PROV_HANDLE* phandle,UCHAR event_type,API_
     {
         /* Already Set while handling PROV_EVT_PROVDATA_INFO */
         MS_ENABLE_PROXY_FEATURE();
+        blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
         /* LED ON/OFF for Provisioning Indication Abstraction Call */
         mesh_model_device_provisioned_ind_pl();
+        BRR_HANDLE handle = 1;
+        MS_brr_remove_bearer(BRR_TYPE_GATT, &handle);
         //light_blink_set(LIGHT_BLUE, LIGHT_BLINK_FAST,3);l???????
         UI_prov_state=ALIG_CONFIG;
     }
@@ -252,6 +255,7 @@ void UI_setup_prov(UCHAR role, UCHAR brr)
     if (PROV_BRR_GATT & brr)
     {
         blebrr_gatt_mode_set(BLEBRR_GATT_PROV_MODE);
+        // blebrr_set_gattmode_pl (BLEBRR_GATT_PROV_MODE);
     }
 
     if (PROV_ROLE_PROVISIONER != role)

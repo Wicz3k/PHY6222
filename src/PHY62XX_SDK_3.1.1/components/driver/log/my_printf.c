@@ -395,7 +395,7 @@ repeat:
     }
 }
 
-static void _uart_putc(char* data, uint16_t size)
+void _uart_putc(char* data, uint16_t size)
 {
     hal_uart_send_buff(UART0, (uint8_t*)data, size);
 }

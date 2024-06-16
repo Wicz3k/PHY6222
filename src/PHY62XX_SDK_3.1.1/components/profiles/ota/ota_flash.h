@@ -40,9 +40,10 @@
 
 enum
 {
-    OTAF_SINGLE_BANK = 0,
+    OTAF_SINGLE_BANK  = 0,
     OTAF_DUAL_BANK_0  = 1,
-    OTAF_DUAL_BANK_1  = 2
+    OTAF_DUAL_BANK_1  = 2,
+    OTAF_DUAL_SLBXIP  = 3
 };
 
 #define DBG_BOOT_IO_TOGGLE do{\
@@ -176,6 +177,9 @@ enum
     #elif(CFG_FLASH == 512)
     #define OTAF_START_ADDR         0x11003000
     #define OTAF_END_ADDR           0x1107ffff
+    #elif(CFG_FLASH == 1024)
+    #define OTAF_START_ADDR         0x11003000
+    #define OTAF_END_ADDR           0x11100000
     #elif(CFG_FLASH == 4096)
     #define OTAF_START_ADDR         0x11003000
     #define OTAF_END_ADDR           0x111fffff

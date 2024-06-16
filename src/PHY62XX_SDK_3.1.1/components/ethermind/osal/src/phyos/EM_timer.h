@@ -16,14 +16,14 @@
 
 /* --------------------------------------------------- Header File Inclusion */
 #include "EM_os.h"
-#include "osal_cbtimer.h"
+#include "osal_cbTimer.h"
 
 /* Enable support to get remaining time to expire of a timer entity */
 #define EM_TIMER_SUPPORT_REMAINING_TIME
 
 /* --------------------------------------------------- Global Definitions */
 /* Maximum number of timer entities */
-#define EM_TIMER_MAX_ENTITIES                       15
+#define EM_TIMER_MAX_ENTITIES                       10
 
 /* Mask to indicate millisecond timeout */
 #define EM_TIMEOUT_MILLISEC                         0x80000000

@@ -14,6 +14,7 @@
 /* ----------------------------------------------- Header File Inclusion */
 #include "EM_timer_internal.h"
 #include "OSAL_Clock.h"
+#include "mcu.h"
 
 /* ----------------------------------------------- Global Definitions */
 /* Timer Elements */
@@ -251,7 +252,9 @@ EM_RESULT EM_start_timer
     EM_RESULT retval;
     TIMER_ENTITY current_timer;
     // HZF
+    HAL_ENTER_CRITICAL_SECTION();
     osalTimeUpdate();
+    HAL_EXIT_CRITICAL_SECTION();
 
     if (NULL == handle)
     {
@@ -354,15 +357,18 @@ void timer_timeout_handler (UINT8* handle)
     /* Unlock Timer */
     timer_unlock ();
 
-    if (timer->data_length > EM_TIMER_STATIC_DATA_SIZE)
+    if(timer->callback != NULL)
     {
-        /* Call the registered timeout handler */
-        timer->callback (timer->allocated_data, timer->data_length);
-    }
-    else
-    {
-        /* Use Static Data */
-        timer->callback (timer->static_data, timer->data_length);
+        if (timer->data_length > EM_TIMER_STATIC_DATA_SIZE)
+        {
+            /* Call the registered timeout handler */
+            timer->callback (timer->allocated_data, timer->data_length);
+        }
+        else
+        {
+            /* Use Static Data */
+            timer->callback (timer->static_data, timer->data_length);
+        }
     }
 
     /* Lock Timer */
@@ -387,7 +393,6 @@ EM_RESULT EM_stop_timer
     TIMER_ENTITY* timer;
     EM_RESULT retval;
     UINT8  timer_id;
-    UINT32 new_timeout;
     Status_t status;
 
     if (EM_TIMER_MAX_ENTITIES <= *handle)
@@ -399,19 +404,19 @@ EM_RESULT EM_stop_timer
         return EM_TIMER_HANDLE_IS_NULL;
     }
 
-    osalTimeUpdate();
+//    HAL_ENTER_CRITICAL_SECTION();
+//    osalTimeUpdate();
+//    HAL_EXIT_CRITICAL_SECTION();
     retval = EM_FAILURE;
     /* Lock Timer */
     timer_lock();
     timer = &timer_entity[*handle];
     /* Store the timer id before deleting entity */
     timer_id = timer->timer_id;
-    new_timeout = 0x10;
 
     if(timer_search_entity(timer) == EM_SUCCESS)
     {
-        if((osal_CbTimerUpdate(timer_id,new_timeout) == EM_SUCCESS)
-                || (osalFindTimer(TASK_ID( timer->timer_id ),EVENT_ID( timer->timer_id )) == NULL))
+        if(osalFindTimer(TASK_ID( timer->timer_id ),EVENT_ID( timer->timer_id )) != NULL)
         {
             retval = timer_del_entity(timer, 0x01);
 
@@ -428,7 +433,6 @@ EM_RESULT EM_stop_timer
                     *handle);
                 /* Stop Timer */
                 status = osal_CbTimerStop(timer_id);
-                osal_clear_event(TASK_ID( timer->timer_id ),EVENT_ID( timer->timer_id ));
 
                 if (SUCCESS != status)
                 {
@@ -442,9 +446,16 @@ EM_RESULT EM_stop_timer
                 }
             }
         }
+        else
+        {
+            retval = EM_SUCCESS;
+            timer->callback = NULL;
+        }
     }
 
-    *handle = EM_TIMER_HANDLE_INIT_VAL;
+    if(retval == EM_SUCCESS)
+        *handle = EM_TIMER_HANDLE_INIT_VAL;
+
     /* Unlock Timer */
     timer_unlock();
     return retval;
@@ -895,16 +906,24 @@ EM_RESULT EM_timer_get_remaining_time
     UINT64        current_timestamp;
     UINT32        time_ms;
 
-    if (NULL == handle)
+//    if (NULL == handle)
+//    {
+//        EM_TIMER_ERR(
+//            "NULL Argument Unacceptable for Timer Handles.\n");
+//        return EM_TIMER_HANDLE_IS_NULL;
+//    }
+    if (EM_TIMER_MAX_ENTITIES <= handle)
     {
         EM_TIMER_ERR(
-            "NULL Argument Unacceptable for Timer Handles.\n");
+            "NULL Argument Unacceptable for Timer Handles.\r\n");
+        /* TODO: Use appropriate error value */
         return EM_TIMER_HANDLE_IS_NULL;
     }
 
     /* Lock Timer */
     timer_lock();
-    timer = (TIMER_ENTITY*)handle;
+//    timer = (TIMER_ENTITY*)handle;
+    timer = &timer_entity[handle];
     retval = timer_search_entity(timer);
 
     if (EM_SUCCESS != retval)

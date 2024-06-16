@@ -1,9 +1,71 @@
 
+/****************************************************************************
+    Included Files
+ ****************************************************************************/
 
 #ifndef __ROM_SYM_H__
 #define __ROM_SYM_H__
 #ifdef USE_ROMSYM_ALIAS
 
+    #define rom_uart_init _symrom_rom_uart_init
+    #define llSetupScan0 _symrom_llSetupScan0
+    #define g_system_reset_cause _symrom_g_system_reset_cause
+    #define spif_read_id _symrom_spif_read_id
+    #define llProcessSlaveControlPacket0 _symrom_llProcessSlaveControlPacket0
+    #define LL_Disconnect0 _symrom_LL_Disconnect0
+    #define enter_sleep_off_mode0 _symrom_enter_sleep_off_mode0
+    #define osal_pwrmgr_powerconserve0 _symrom_osal_pwrmgr_powerconserve0
+    #define TIM2_IRQHandler _symrom_TIM2_IRQHandler
+    #define HCI_PPLUS_AdvEventDoneNoticeCmd _symrom_HCI_PPLUS_AdvEventDoneNoticeCmd
+    #define move_to_slave_function0 _symrom_move_to_slave_function0
+    #define ll_scheduler0  _symrom_ll_scheduler0
+    #define llSetupNextSlaveEvent0 _symrom_llSetupNextSlaveEvent0
+    #define LL_set_default_conn_params0 _symrom_LL_set_default_conn_params0
+    #define rf_init _symrom_rf_init
+    #define rf_calibrate _symrom_rf_calibrate
+    #define gpio_write _symrom_gpio_write
+    #define ll_processExtInitIRQ _symrom_ll_processExtInitIRQ
+    #define ll_processExtScanIRQ _symrom_ll_processExtScanIRQ
+    #define ll_processExtAdvIRQ _symrom_ll_processExtAdvIRQ
+    #define LL_SetDataLengh0 _symrom_LL_SetDataLengh0
+    #define LL_SetScanParam0 _symrom_LL_SetScanParam0
+    #define LL_SetAdvParam0 _symrom_LL_SetAdvParam0
+    #define LL_CreateConn0 _symrom_LL_CreateConn0
+    #define isPeerRpaStore _symrom_isPeerRpaStore
+    #define storeRpaListIndex _symrom_storeRpaListIndex
+    #define currentPeerRpa _symrom_currentPeerRpa
+
+    #define isPeerRpaStore _symrom_isPeerRpaStore
+    #define LL_ENC_AES128_Encrypt0 _symrom_LL_ENC_AES128_Encrypt0
+    #define llProcessTxData0 _symrom_llProcessTxData0
+    #define sleep_tick _symrom_sleep_tick
+    #define g_currentPeerAddrType _symrom_g_currentPeerAddrType
+
+    #define g_rfPhyTxPower    _symrom_g_rfPhyTxPower
+    #define ble_main _symrom_ble_main
+
+    #define HCI_LE_Write_Rf_Path_CompensationCmd  _symrom_HCI_LE_Write_Rf_Path_CompensationCmd
+    #define HCI_LE_ReadPeerResolvableAddressCmd   _symrom_HCI_LE_ReadPeerResolvableAddressCmd
+    #define HCI_LE_AddDevToPeriodicAdvListCmd _symrom_HCI_LE_AddDevToPeriodicAdvListCmd
+    #define HCI_LE_RemovePeriodicAdvListCmd   _symrom_HCI_LE_RemovePeriodicAdvListCmd
+    #define HCI_LE_ClearPeriodicAdvListCmd    _symrom_HCI_LE_ClearPeriodicAdvListCmd
+    #define HCI_LE_ReadPeriodicAdvListSizeCmd _symrom_HCI_LE_ReadPeriodicAdvListSizeCmd
+    #define HCI_LE_Read_Transmit_PowerCmd _symrom_HCI_LE_Read_Transmit_PowerCmd
+    #define HCI_LE_Read_Rf_Path_CompensationCmd   _symrom_HCI_LE_Read_Rf_Path_CompensationCmd
+    #define HCI_LE_Set_Privacy_ModeCmd    _symrom_HCI_LE_Set_Privacy_ModeCmd
+
+    #define ll_readPeerIRK _symrom_ll_readPeerIRK
+    #define ownRandomAddr _symrom_ownRandomAddr
+    #define g_currentLocalRpa _symrom_g_currentLocalRpa
+    #define g_currentPeerRpa _symrom_g_currentPeerRpa
+    #define llProcessSlaveControlProcedures0 _symrom_llProcessSlaveControlProcedures0
+    #define g_rfTxPathCompensation _symrom_g_rfTxPathCompensation
+    #define ll_isLegacyAdv _symrom_ll_isLegacyAdv
+    #define g_llScanMode _symrom_g_llScanMode
+    #define rf_phy_change_cfg _symrom_rf_phy_change_cfg
+    #define llProcessMasterControlProcedures0 _symrom_llProcessMasterControlProcedures0
+
+    #define spif_config _symrom_spif_config
     #define m_in_critical_region _symrom_m_in_critical_region
     #define _spif_read_status_reg _symrom__spif_read_status_reg
     #define _spif_wait_nobusy _symrom__spif_wait_nobusy
@@ -29,7 +91,7 @@
     #define clear_timer _symrom_clear_timer
     #define clear_timer_int _symrom_clear_timer_int
     #define clk_get_pclk _symrom_clk_get_pclk
-    #define clk_init _symrom_clk_init
+    //#define clk_init _symrom_clk_init
     #define clk_set_pclk_div _symrom_clk_set_pclk_div
     #define clk_spif_ref_clk _symrom_clk_spif_ref_clk
     #define config_RTC _symrom_config_RTC
@@ -52,6 +114,7 @@
     #define enableSleep _symrom_enableSleep
     #define enter_sleep_off_mode _symrom_enter_sleep_off_mode
     #define enterSleepProcess _symrom_enterSleepProcess
+    #define enterSleepProcess0 _symrom_enterSleepProcess0
     #define ext_adv_hdr _symrom_ext_adv_hdr
     #define extInitInfo _symrom_extInitInfo
     #define extScanInfo _symrom_extScanInfo
@@ -73,29 +136,29 @@
     #define g_currentTimerTask _symrom_g_currentTimerTask
     #define g_dle_taskEvent _symrom_g_dle_taskEvent
     #define g_dle_taskID _symrom_g_dle_taskID
-    //#define g_dtmAccessCode _symrom_g_dtmAccessCode
-    //#define g_dtmCarrSens _symrom_g_dtmCarrSens
-    //#define g_dtmCmd _symrom_g_dtmCmd
-    //#define g_dtmCtrl _symrom_g_dtmCtrl
-    //#define g_dtmEvt _symrom_g_dtmEvt
-    //#define g_dtmExtLen _symrom_g_dtmExtLen
-    //#define g_dtmFoff _symrom_g_dtmFoff
-    //#define g_dtmFreq _symrom_g_dtmFreq
-    //#define g_dtmLength _symrom_g_dtmLength
-    //#define g_dtmModeType _symrom_g_dtmModeType
-    //#define g_dtmPara _symrom_g_dtmPara
-    //#define g_dtmPerAutoIntv _symrom_g_dtmPerAutoIntv
-    //#define g_dtmPKT _symrom_g_dtmPKT
-    //#define g_dtmPktCount _symrom_g_dtmPktCount
-    //#define g_dtmPktIntv _symrom_g_dtmPktIntv
-    //#define g_dtmRsp _symrom_g_dtmRsp
-    //#define g_dtmRssi _symrom_g_dtmRssi
-    //#define g_dtmRxCrcNum _symrom_g_dtmRxCrcNum
-    //#define g_dtmRxTONum _symrom_g_dtmRxTONum
-    //#define g_dtmStatus _symrom_g_dtmStatus
-    //#define g_dtmTick _symrom_g_dtmTick
-    //#define g_dtmTpCalEnable _symrom_g_dtmTpCalEnable
-    //#define g_dtmTxPower _symrom_g_dtmTxPower
+    #define g_dtmAccessCode _symrom_g_dtmAccessCode
+    #define g_dtmCarrSens _symrom_g_dtmCarrSens
+    #define g_dtmCmd _symrom_g_dtmCmd
+    #define g_dtmCtrl _symrom_g_dtmCtrl
+    #define g_dtmEvt _symrom_g_dtmEvt
+    #define g_dtmExtLen _symrom_g_dtmExtLen
+    #define g_dtmFoff _symrom_g_dtmFoff
+    #define g_dtmFreq _symrom_g_dtmFreq
+    #define g_dtmLength _symrom_g_dtmLength
+    #define g_dtmModeType _symrom_g_dtmModeType
+    #define g_dtmPara _symrom_g_dtmPara
+    #define g_dtmPerAutoIntv _symrom_g_dtmPerAutoIntv
+    #define g_dtmPKT _symrom_g_dtmPKT
+    #define g_dtmPktCount _symrom_g_dtmPktCount
+    #define g_dtmPktIntv _symrom_g_dtmPktIntv
+    #define g_dtmRsp _symrom_g_dtmRsp
+    #define g_dtmRssi _symrom_g_dtmRssi
+    #define g_dtmRxCrcNum _symrom_g_dtmRxCrcNum
+    #define g_dtmRxTONum _symrom_g_dtmRxTONum
+    #define g_dtmStatus _symrom_g_dtmStatus
+    #define g_dtmTick _symrom_g_dtmTick
+    #define g_dtmTpCalEnable _symrom_g_dtmTpCalEnable
+    #define g_dtmTxPower _symrom_g_dtmTxPower
     #define g_extAdvNumber _symrom_g_extAdvNumber
     #define g_getPn23_cnt _symrom_g_getPn23_cnt
     #define g_getPn23_seed _symrom_g_getPn23_seed
@@ -128,19 +191,22 @@
     #define g_pLLcteQSample _symrom_g_pLLcteQSample
     #define g_pmCounters _symrom_g_pmCounters
     #define g_pPeriodicAdvInfo _symrom_g_pPeriodicAdvInfo
-    //#define g_rfPhyClkSel _symrom_g_rfPhyClkSel
-    //#define g_rfPhyDtmCmd _symrom_g_rfPhyDtmCmd
-    //#define g_rfPhyDtmEvt _symrom_g_rfPhyDtmEvt
-    //#define g_rfPhyFreqOffSet _symrom_g_rfPhyFreqOffSet
-    //#define g_rfPhyPktFmt _symrom_g_rfPhyPktFmt
-    //#define g_rfPhyRxDcIQ _symrom_g_rfPhyRxDcIQ
-    //#define g_rfPhyTpCal0 _symrom_g_rfPhyTpCal0
-    //#define g_rfPhyTpCal0_2Mbps _symrom_g_rfPhyTpCal0_2Mbps
-    //#define g_rfPhyTpCal1 _symrom_g_rfPhyTpCal1
-    //#define g_rfPhyTpCal1_2Mbps _symrom_g_rfPhyTpCal1_2Mbps
-    //#define g_rfPhyTxPower _symrom_g_rfPhyTxPower
+    #define ll_isIrkAllZero   _symrom_ll_isIrkAllZero
+    #define g_currentLocalAddrType    _symrom_g_currentLocalAddrType
+    #define g_rfPhyClkSel _symrom_g_rfPhyClkSel
+    #define g_rfPhyDtmCmd _symrom_g_rfPhyDtmCmd
+    #define g_rfPhyDtmEvt _symrom_g_rfPhyDtmEvt
+    #define g_llAdvMode _symrom_g_llAdvMode
+    #define g_rfPhyFreqOffSet _symrom_g_rfPhyFreqOffSet
+    #define g_rfPhyPktFmt _symrom_g_rfPhyPktFmt
+    #define g_rfPhyRxDcIQ _symrom_g_rfPhyRxDcIQ
+    #define g_rfPhyTpCal0 _symrom_g_rfPhyTpCal0
+    #define g_rfPhyTpCal0_2Mbps _symrom_g_rfPhyTpCal0_2Mbps
+    #define g_rfPhyTpCal1 _symrom_g_rfPhyTpCal1
+    #define g_rfPhyTpCal1_2Mbps _symrom_g_rfPhyTpCal1_2Mbps
+    /* #define g_rfPhyTxPower _symrom_g_rfPhyTxPower */
     #define g_rx_adv_buf _symrom_g_rx_adv_buf
-    //#define g_rxAdcClkSel _symrom_g_rxAdcClkSel
+    #define g_rxAdcClkSel _symrom_g_rxAdcClkSel
     #define g_same_rf_channel_flag _symrom_g_same_rf_channel_flag
     #define g_schExtAdvNum _symrom_g_schExtAdvNum
     #define g_schExtAdvNum_periodic _symrom_g_schExtAdvNum_periodic
@@ -214,7 +280,7 @@
     #define HCI_LE_CreateConnCancelCmd _symrom_HCI_LE_CreateConnCancelCmd
     #define HCI_LE_CreateConnCmd _symrom_HCI_LE_CreateConnCmd
     #define HCI_LE_EncryptCmd _symrom_HCI_LE_EncryptCmd
-    #define HCI_LE_ExtendedCreateConnectionCmd _symrom_HCI_LE_ExtendedCreateConnectionCmd
+    // #define HCI_LE_ExtendedCreateConnectionCmd _symrom_HCI_LE_ExtendedCreateConnectionCmd
     #define HCI_LE_LtkReqNegReplyCmd _symrom_HCI_LE_LtkReqNegReplyCmd
     #define HCI_LE_LtkReqReplyCmd _symrom_HCI_LE_LtkReqReplyCmd
     #define HCI_LE_PeriodicAdvertisingCreateSyncCancelCmd _symrom_HCI_LE_PeriodicAdvertisingCreateSyncCancelCmd
@@ -290,7 +356,7 @@
     #define HCI_TestAppTaskRegister _symrom_HCI_TestAppTaskRegister
     #define HCI_ValidConnTimeParams _symrom_HCI_ValidConnTimeParams
     #define HCI_VendorSpecifcCommandCompleteEvent _symrom_HCI_VendorSpecifcCommandCompleteEvent
-    #define hciCmdTable _symrom_hciCmdTable
+    /* #define hciCmdTable _symrom_hciCmdTable */
     #define hciCtrlCmdToken _symrom_hciCtrlCmdToken
     #define hciExtTaskID _symrom_hciExtTaskID
     #define hciGapTaskID _symrom_hciGapTaskID
@@ -338,6 +404,7 @@
     #define LL_ConnUpdate _symrom_LL_ConnUpdate
     #define LL_CreateConn _symrom_LL_CreateConn
     #define LL_CreateConnCancel _symrom_LL_CreateConnCancel
+    #define LL_CreateConnCancel0 _symrom_LL_CreateConnCancel0
     #define LL_CTE_Report_FailedCback _symrom_LL_CTE_Report_FailedCback
     #define LL_CtrlToHostFlowControl _symrom_LL_CtrlToHostFlowControl
     #define LL_DataLengthChangeCback _symrom_LL_DataLengthChangeCback
@@ -403,7 +470,7 @@
     #define LL_EXT_SetTxPower _symrom_LL_EXT_SetTxPower
     #define LL_ExtAdvReportCback _symrom_LL_ExtAdvReportCback
     #define LL_extAdvTimerExpProcess _symrom_LL_extAdvTimerExpProcess
-    #define LL_ExtendedCreateConnection _symrom_LL_ExtendedCreateConnection
+    // #define LL_ExtendedCreateConnection _symrom_LL_ExtendedCreateConnection
     #define LL_extInitTimerExpProcess _symrom_LL_extInitTimerExpProcess
     #define LL_extScanTimerExpProcess _symrom_LL_extScanTimerExpProcess
     #define ll_generateExtAdvDid _symrom_ll_generateExtAdvDid
@@ -442,6 +509,7 @@
     #define ll_hw_read_rfifo_zb _symrom_ll_hw_read_rfifo_zb
     #define ll_hw_read_tfifo_packet _symrom_ll_hw_read_tfifo_packet
     #define ll_hw_read_tfifo_rtlp _symrom_ll_hw_read_tfifo_rtlp
+    #define ll_hw_read_tfifo_rtlp0 _symrom_ll_hw_read_tfifo_rtlp0
     #define ll_hw_rst_rfifo _symrom_ll_hw_rst_rfifo
     #define ll_hw_rst_tfifo _symrom_ll_hw_rst_tfifo
     #define ll_hw_set_ant_pattern _symrom_ll_hw_set_ant_pattern
@@ -478,7 +546,6 @@
     #define ll_hw_update_trlp_mode _symrom_ll_hw_update_trlp_mode
     #define ll_hw_write_tfifo _symrom_ll_hw_write_tfifo
     #define LL_Init _symrom_LL_Init
-    #define LL_InitConnectContext _symrom_LL_InitConnectContext
     #define LL_InitExtendedAdv _symrom_LL_InitExtendedAdv
     #define LL_InitExtendedScan _symrom_LL_InitExtendedScan
     #define LL_InitPeriodicAdv _symrom_LL_InitPeriodicAdv
@@ -517,9 +584,11 @@
     #define LL_prdScanTimerExpProcess _symrom_LL_prdScanTimerExpProcess
     #define ll_processBasicIRQ _symrom_ll_processBasicIRQ
     #define LL_ProcessEvent _symrom_LL_ProcessEvent
-    #define ll_processExtAdvIRQ _symrom_ll_processExtAdvIRQ
+    #define LL_ProcessEvent0 _symrom_LL_ProcessEvent0
+    /*  #define ll_processExtAdvIRQ _symrom_ll_processExtAdvIRQ
     #define ll_processExtInitIRQ _symrom_ll_processExtInitIRQ
     #define ll_processExtScanIRQ _symrom_ll_processExtScanIRQ
+    */
     #define ll_processMissMasterEvt _symrom_ll_processMissMasterEvt
     #define ll_processMissSlaveEvt _symrom_ll_processMissSlaveEvt
     #define ll_processPrdAdvIRQ _symrom_ll_processPrdAdvIRQ
@@ -529,6 +598,7 @@
     #define LL_RandCback _symrom_LL_RandCback
     #define LL_READ_Anatenna_Info _symrom_LL_READ_Anatenna_Info
     #define ll_read_rxfifo _symrom_ll_read_rxfifo
+    #define ll_read_rxfifo0 _symrom_ll_read_rxfifo0
     #define LL_ReadAdvChanTxPower _symrom_LL_ReadAdvChanTxPower
     #define LL_ReadBDADDR _symrom_LL_ReadBDADDR
     #define LL_ReadCarrSens _symrom_LL_ReadCarrSens
@@ -553,6 +623,7 @@
     #define LL_RemoveResolvingListDevice _symrom_LL_RemoveResolvingListDevice
     #define LL_RemoveWhiteListDevice _symrom_LL_RemoveWhiteListDevice
     #define LL_Reset _symrom_LL_Reset
+    #define LL_Reset0 _symrom_LL_Reset0
     #define ll_ResolveRandomAddrs _symrom_ll_ResolveRandomAddrs
     #define LL_RX_bm_alloc _symrom_LL_RX_bm_alloc
     #define LL_RxDataCompleteCback _symrom_LL_RxDataCompleteCback
@@ -589,6 +660,7 @@
     #define LL_TaskID _symrom_LL_TaskID
     #define LL_TX_bm_alloc _symrom_LL_TX_bm_alloc
     #define LL_TxData _symrom_LL_TxData
+    #define LL_TxData0 _symrom_LL_TxData0
     #define ll_updateAuxAdvTimeSlot _symrom_ll_updateAuxAdvTimeSlot
     #define ll_updateExtAdvRemainderTime _symrom_ll_updateExtAdvRemainderTime
     #define LL_WriteSuggestedDefaultDataLength _symrom_LL_WriteSuggestedDefaultDataLength
@@ -604,6 +676,7 @@
     #define llCheckWhiteListUsage _symrom_llCheckWhiteListUsage
     #define llConnCleanup _symrom_llConnCleanup
     #define llConnTerminate _symrom_llConnTerminate
+    #define llConnTerminate0 _symrom_llConnTerminate0
     #define llConvertCtrlProcTimeoutToEvent _symrom_llConvertCtrlProcTimeoutToEvent
     #define llConvertLstoToEvent _symrom_llConvertLstoToEvent
     #define llCurrentScanChn _symrom_llCurrentScanChn
@@ -643,11 +716,13 @@
     #define llProcessMasterControlPacket _symrom_llProcessMasterControlPacket
     #define llProcessMasterControlProcedures _symrom_llProcessMasterControlProcedures
     #define llProcessRxData _symrom_llProcessRxData
+    #define llProcessRxData0 _symrom_llProcessRxData0
     #define llProcessSlaveControlPacket _symrom_llProcessSlaveControlPacket
     #define llProcessSlaveControlProcedures _symrom_llProcessSlaveControlProcedures
     #define llProcessTxData _symrom_llProcessTxData
     #define llReleaseAllConnId _symrom_llReleaseAllConnId
     #define llReleaseConnId _symrom_llReleaseConnId
+    #define llReleaseConnId0 _symrom_llReleaseConnId0
     #define llReplaceCtrlPkt _symrom_llReplaceCtrlPkt
     #define llResetConnId _symrom_llResetConnId
     #define llResetRfCounters _symrom_llResetRfCounters
@@ -658,6 +733,7 @@
     #define llSetNextDataChan _symrom_llSetNextDataChan
     #define llSetNextPhyMode _symrom_llSetNextPhyMode
     #define llSetupAdv _symrom_llSetupAdv
+    #define llSetupAdv0 _symrom_llSetupAdv0
     #define llSetupAdvExtIndPDU _symrom_llSetupAdvExtIndPDU
     #define llSetupAuxAdvIndPDU _symrom_llSetupAuxAdvIndPDU
     #define llSetupAuxChainIndPDU _symrom_llSetupAuxChainIndPDU
@@ -711,6 +787,7 @@
     #define llSetupVersionIndReq _symrom_llSetupVersionIndReq
     #define llSlaveEvt_TaskAbort _symrom_llSlaveEvt_TaskAbort
     #define llSlaveEvt_TaskEndOk _symrom_llSlaveEvt_TaskEndOk
+    #define llSlaveEvt_TaskEndOk0 _symrom_llSlaveEvt_TaskEndOk0
     #define llState _symrom_llState
     #define llTaskState _symrom_llTaskState
     #define llTrxNumAdaptiveConfig _symrom_llTrxNumAdaptiveConfig
@@ -725,6 +802,7 @@
     #define log_set_putc _symrom_log_set_putc
     #define log_vsprintf _symrom_log_vsprintf
     #define move_to_master_function _symrom_move_to_master_function
+    #define move_to_master_function0 _symrom_move_to_master_function0
     #define move_to_slave_function _symrom_move_to_slave_function
     #define NMI_Handler _symrom_NMI_Handler
     #define numComplPkts _symrom_numComplPkts
@@ -791,6 +869,10 @@
     #define osal_sys_tick _symrom_osal_sys_tick
     #define osal_timer_num_active _symrom_osal_timer_num_active
     #define OSAL_timeSeconds _symrom_OSAL_timeSeconds
+    #define osalMemStat _symrom_osalMemStat
+    #define theHeap _symrom_theHeap
+    #define ff1 _symrom_ff1
+    #define heapSize _symrom_heapSize
     #define osalAddTimer _symrom_osalAddTimer
     #define osalDeleteTimer _symrom_osalDeleteTimer
     #define osalFindTimer _symrom_osalFindTimer
@@ -833,6 +915,9 @@
     //#define rf_tpCal_cfg _symrom_rf_tpCal_cfg
     //#define rf_tpCal_cfg_avg _symrom_rf_tpCal_cfg_avg
     //#define rf_tpCal_gen_cap_arrary _symrom_rf_tpCal_gen_cap_arrary
+    #define HCI_PPLUS_ConnEventDoneNoticeCmd _symrom_HCI_PPLUS_ConnEventDoneNoticeCmd
+
+
     #define rfCounters _symrom_rfCounters
     #define rom_board_init _symrom_rom_board_init
     #define rtc_clear _symrom_rtc_clear
@@ -878,6 +963,7 @@
     #define spif_wrdata _symrom_spif_wrdata
     #define spif_write _symrom_spif_write
     #define spif_write_protect _symrom_spif_write_protect
+    #define spif_write_dma _symrom_spif_write_dma
     #define sram_ret_patch _symrom_sram_ret_patch
     #define supportedCmdsTable _symrom_supportedCmdsTable
     #define syncInfo _symrom_syncInfo
@@ -895,6 +981,7 @@
     #define whiten_seed _symrom_whiten_seed
     #define zigbee_crc16_gen _symrom_zigbee_crc16_gen
     #define WaitUs _symrom_WaitUs
+    #define g_hclk_table _symrom_g_hclk_table
 
 #endif
 #endif

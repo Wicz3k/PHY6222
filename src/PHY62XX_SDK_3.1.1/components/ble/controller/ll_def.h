@@ -1582,6 +1582,20 @@ extern extAdvHdr_t  ext_adv_hdr;
 // 2020-02-15 add for connectionless IQ Sample buffer
 extern uint16* g_pLLcteISample;
 extern uint16* g_pLLcteQSample;
+
+
+typedef struct
+{
+    uint8_t     valid;                      // peer device valid flag
+    uint8_t     peerAddrType;               // peer device address type
+    uint8_t     peerAddr[ 6 ];              // peer device address
+} llDevInfo_t;
+typedef struct
+{
+    llDevInfo_t devInfo[MAX_NUM_LL_CONN_ROM_LIMT];
+} llDevList_t;
+
+
 #endif
 
 

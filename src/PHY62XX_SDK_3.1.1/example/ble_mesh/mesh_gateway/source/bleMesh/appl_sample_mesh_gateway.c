@@ -1,4 +1,4 @@
-/* ----------------------------------------- Header File Inclusion */
+﻿/* ----------------------------------------- Header File Inclusion */
 #include "MS_common.h"
 #include "MS_access_api.h"
 #include "MS_config_api.h"
@@ -16,6 +16,7 @@
 #include "ll_def.h"
 #include "ll_enc.h"
 #include "EXT_cbtimer.h"
+#include "cry.h"
 
 
 #undef USE_HSL                 // enable Light HSL server model
@@ -49,7 +50,11 @@ MS_NET_ADDR     ui_raw_data_destnation_address;
 
 
 #define VENDOR_PRODUCT_MAC_ADDR         0x4000
-#define PROCFG_COMPLETE_TIMEOUT         10
+#ifdef BLE_CLIENT_ROLE
+    #define PROCFG_COMPLETE_TIMEOUT         60
+#else
+    #define PROCFG_COMPLETE_TIMEOUT         10
+#endif
 
 
 #define UI_PROV_START_ADDRESS           0x0002
@@ -86,7 +91,7 @@ MS_NET_ADDR     ui_raw_data_destnation_address;
 #define UI_DISPLAY_AUTH_NUMERIC               35007
 #define UI_DISPLAY_AUTH_STRING                "f00l"
 
-#define UI_DEVICE_UUID      {0x05, 0x04, 0x62, 0x12, 0x00, 0x00, 0x00, 0x01, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x00, 0x00}
+#define UI_DEVICE_UUID      {0x04, 0x05, 0x62, 0x22, 0x00, 0x00, 0x00, 0x01, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x00, 0x00}
 
 /* AppKey to be used by the configuration client */
 #define UI_APPKEY           {0x50, 0x48, 0x59, 0x50, 0x4C, 0x55, 0x53, 0x49, 0x6e, 0x63, 0x41, 0x70, 0x70, 0x4b, 0x65, 0x79}
@@ -180,6 +185,10 @@ MS_ACCESS_MODEL_HANDLE   UI_config_client_model_handle;
 /* Provsion timeout handle */
 DECL_STATIC EM_timer_handle procfg_timer_handle;
 
+#ifdef BLE_CLIENT_ROLE
+    DECL_STATIC UCHAR UI_gatt_pvsn_fsm;
+#endif
+
 
 /** Appkey to be used for model binding */
 DECL_STATIC UCHAR UI_appkey[MS_ACCESS_APPKEY_SIZE] = UI_APPKEY;
@@ -222,13 +231,24 @@ typedef struct MS_state_vendor_example_test_struct
 
 } MS_STATE_VENDOR_EXAMPLE_TEST_STRUCT;
 
+typedef struct _UI_PROV_BING_S
+{
+    PROV_BRR        brr;
+    PROV_DEVICE_S   pdev;
+    UCHAR           attention;
+    PROV_HANDLE     phandle;
+} UI_PROV_BING_S;
+
+UI_PROV_BING_S ui_prov_list[1];
+
+
+
 
 extern UCHAR blebrr_prov_started;
 extern uint32            osal_sys_tick;
 
 MS_PROV_DEV_ENTRY g_prov_dev_list[MS_MAX_DEV_KEYS];
 UINT16  g_num_entries;
-
 
 
 static API_RESULT ui_check_destnation_address(MS_NET_ADDR check_dst_addr)
@@ -289,6 +309,7 @@ static void UI_netkey_generate(UINT8* netkey)
     UI_device_uuid[14] = osal_sys_tick & 0xff;
     UI_device_uuid[15] = (osal_sys_tick>>8) & 0xff;
     EM_mem_copy(old_key, netkey, 16);
+    //appl_dump_bytes(netkey,16);
     LL_ENC_AES128_Encrypt(old_key,UI_device_uuid,netkey);
 }
 
@@ -366,6 +387,7 @@ API_RESULT UI_sample_binding_app_key(void)
             /* Found a Valid App Key */
             /* Keeping the retval as API_SUCCESS */
             retval=MS_access_bind_model_app(UI_generic_onoff_client_model_handle, handle);
+            CONSOLE_OUT("BINDING App Key %04x (%04x %04x)\n",retval,UI_generic_onoff_client_model_handle,handle);
             #ifdef  USE_VENDORMODEL
             retval=MS_access_bind_model_app(UI_vendor_defined_client_model_handle, handle);
             CONSOLE_OUT("BINDING App Key %04x (%04x %04x)\n",retval,UI_vendor_defined_client_model_handle,handle);
@@ -447,7 +469,7 @@ void UI_config_client_model_app_bind(UINT16 addr, UINT16 appkey_index, UCHAR mod
 }
 
 /* Set Publish Address */
-void UI_set_publish_address(UINT16 addr, MS_ACCESS_MODEL_HANDLE model_handle,UINT8 config_mode)
+API_RESULT UI_set_publish_address(UINT16 addr, MS_ACCESS_MODEL_HANDLE model_handle,UINT8 config_mode)
 {
     API_RESULT retval;
     MS_ACCESS_PUBLISH_INFO  publish_info;
@@ -470,6 +492,11 @@ void UI_set_publish_address(UINT16 addr, MS_ACCESS_MODEL_HANDLE model_handle,UIN
         {
             publish_info.appkey_index = MS_CONFIG_LIMITS(MS_MAX_APPS) + dev_key_handle;
             CONSOLE_OUT("DevKey -> AppKey Index: 0x%04X\n", publish_info.appkey_index);
+        }
+        else
+        {
+            CONSOLE_OUT("Failed Get Device Key Handle Status: 0x%04X\n", retval);
+            return API_FAILURE;
         }
     }
     else
@@ -494,9 +521,10 @@ void UI_set_publish_address(UINT16 addr, MS_ACCESS_MODEL_HANDLE model_handle,UIN
     {
         CONSOLE_OUT
         ("Failed to set publish address. Status 0x%04X\n", retval);
+        return API_FAILURE;
     }
 
-    return;
+    return API_SUCCESS;
 }
 
 void UI_generic_onoff_set(UCHAR state)
@@ -1025,6 +1053,9 @@ API_RESULT UI_config_client_cb
         #ifdef EASY_BOUNDING
         UI_SET_RAW_DATA_DST_ADDR(UI_prov_data.uaddr);
         MS_access_cm_set_transmit_state(MS_NETWORK_TX_STATE, (0<<3)|0);
+        #ifdef BLE_CLIENT_ROLE
+        blebrr_scan_enable();
+        #endif
         /* Set provision started */
         blebrr_prov_started = MS_FALSE;
         EM_stop_timer(&procfg_timer_handle);
@@ -1331,6 +1362,9 @@ API_RESULT UI_prov_callback
             break;
         }
 
+        ui_prov_list[0].pdev.oob = rdev->oob;
+        EM_mem_copy(ui_prov_list[0].pdev.uuid,rdev->uuid,MS_DEVICE_UUID_SIZE);
+        ui_prov_list[0].phandle = *phandle;
         CONSOLE_OUT ("Recvd PROV_EVT_UNPROVISIONED_BEACON\n");
         CONSOLE_OUT ("Status - 0x%04X\n", event_result);
         CONSOLE_OUT ("Mac: %02X %02X %02X %02X %02X %02X\n",rdev->uuid[8],
@@ -1338,8 +1372,32 @@ API_RESULT UI_prov_callback
         CONSOLE_OUT ("Status - 0x%04X\n", event_result);
         /* Set provision started */
         blebrr_prov_started = MS_TRUE;
+        #ifdef BLE_CLIENT_ROLE
+        UINT8 mac_addr[6];
+        mac_addr[0] = rdev->uuid[13];
+        mac_addr[1] = rdev->uuid[12];
+        mac_addr[2] = rdev->uuid[11];
+        mac_addr[3] = rdev->uuid[10];
+        mac_addr[4] = rdev->uuid[9];
+        mac_addr[5] = rdev->uuid[8];
+        UCHAR proxy_state;
+        MS_proxy_fetch_state(&proxy_state);
+
+        if(proxy_state == MS_PROXY_CONNECTED)
+        {
+            blebrr_disconnect_pl();
+            UI_gatt_pvsn_fsm = 1;
+        }
+        else
+        {
+            blebrr_create_gatt_conn_pl(0,mac_addr);
+            blebrr_gatt_mode_set(BLEBRR_GATT_PROV_MODE);
+        }
+
+        #else
         /* Bind to the device */
         retval = MS_prov_bind(PROV_BRR_ADV, rdev, UI_PROV_DEVICE_ATTENTION_TIMEOUT, phandle);
+        #endif
         CONSOLE_OUT("Retval - 0x%04X\n", retval);
         break;
 
@@ -1498,66 +1556,44 @@ API_RESULT UI_prov_callback
         {
             if (PROV_ROLE_PROVISIONER == UI_prov_role)
             {
-                retval = EM_start_timer
-                         (
-                             &procfg_timer_handle,
-                             PROCFG_COMPLETE_TIMEOUT,
-                             UI_provcfg_complete_timeout_handler,
-                             NULL,
-                             0
-                         );
-//                    if (0x0001 != UI_prov_data.uaddr)
-//                    {
-//                        /* Holding a temporary structure for local prov data */
-//                        PROV_DATA_S temp_ps_prov_data;
-//                        EM_mem_copy
-//                        (
-//                            &temp_ps_prov_data,
-//                            &UI_prov_data,
-//                            sizeof(UI_prov_data)
-//                        );
-//                        /**
-//                         * Assigning the Local Unicast Address of the Provisioner
-//                         * to the Access Layer along with other related keys.
-//                         */
-//                        temp_ps_prov_data.uaddr = 0x0001;
-//                        blebrr_scan_pl(FALSE);    //by hq
-//                        hal_gpio_toggle(P3);
-//                        /* Provide Provisioning Data to Access Layer */
-//                        MS_access_cm_set_prov_data
-//                        (
-//                            &temp_ps_prov_data
-//                        );
-//                        hal_gpio_toggle(P3);
-//                        /**
-//                         *  NOTE:
-//                         *  Increment the appl_prov_data.uaddr for the next
-//                         *  set of device which is getting provisioned based on
-//                         *  the address and number of elements present in the last
-//                         *  provisioned device.
-//                         */
-//                    }
                 /* Set the Publish address for Config Client */
-                UI_set_publish_address(UI_prov_data.uaddr, UI_config_client_model_handle,MS_TRUE);
-                net_delete_from_cache(UI_prov_data.uaddr);
-                ltrn_delete_from_reassembled_cache(UI_prov_data.uaddr);
-                ltrn_delete_from_replay_cache(UI_prov_data.uaddr);
+                retval = UI_set_publish_address(UI_prov_data.uaddr, UI_config_client_model_handle,MS_TRUE);
 
-                if(UI_subnet_valid)
+                if(retval == API_SUCCESS)
                 {
-                    #if (CFG_HEARTBEAT_MODE)
-                    UI_trn_set_heartbeat_publication();
-                    #endif
-                    UI_subnet_valid = 0;
-                    MS_net_start_snb_timer(0);
-                }
+                    retval = EM_start_timer
+                             (
+                                 &procfg_timer_handle,
+                                 PROCFG_COMPLETE_TIMEOUT,
+                                 UI_provcfg_complete_timeout_handler,
+                                 NULL,
+                                 0
+                             );
+                    net_delete_from_cache(UI_prov_data.uaddr);
+                    ltrn_delete_from_reassembled_cache(UI_prov_data.uaddr);
+                    ltrn_delete_from_replay_cache(UI_prov_data.uaddr);
 
-                #ifndef EASY_BOUNDING
-                /* Get the Composition data */
-                UI_config_client_get_composition_data(0x00);
-                #else
-                UI_config_client_appkey_add(0, 0, UI_appkey);
-                #endif
+                    if(UI_subnet_valid)
+                    {
+                        #if (CFG_HEARTBEAT_MODE)
+                        UI_trn_set_heartbeat_publication();
+                        #endif
+                        UI_subnet_valid = 0;
+                        MS_net_start_snb_timer(0);
+                    }
+
+                    #ifndef BLE_CLIENT_ROLE
+                    #ifndef EASY_BOUNDING
+                    /* Get the Composition data */
+                    UI_config_client_get_composition_data(0x00);
+                    #else
+                    UI_config_client_appkey_add(0, 0, UI_appkey);
+                    #endif
+                    #else
+                    blebrr_disconnect_pl();
+                    blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
+                    #endif
+                }
             }
         }
         else
@@ -1574,6 +1610,79 @@ API_RESULT UI_prov_callback
     return API_SUCCESS;
 }
 
+#ifdef BLE_CLIENT_ROLE
+void UI_gatt_iface_event_pl_cb
+(
+    UCHAR  ev_name,
+    UCHAR  ev_param
+)
+{
+    switch(ev_name)
+    {
+    /* GATT Bearer BLE Link Layer Disconnected */
+    case BLEBRR_GATT_IFACE_DOWN:
+        CONSOLE_OUT("\r\n >> GATT Bearer BLE Link Layer Disconnection Event Received!\r\n");
+        blebrr_scan_enable();
+
+        if((blebrr_gatt_mode_get()==BLEBRR_GATT_PROV_MODE)&&(blebrr_prov_started == MS_TRUE))
+        {
+            blebrr_prov_started = MS_FALSE;
+            blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
+        }
+        else if((UI_gatt_pvsn_fsm == 1)&&(blebrr_prov_started == MS_TRUE))
+        {
+            UI_gatt_pvsn_fsm = 0;
+            UINT8 mac_addr[6];
+            mac_addr[0] = ui_prov_list[0].pdev.uuid[13];
+            mac_addr[1] = ui_prov_list[0].pdev.uuid[12];
+            mac_addr[2] = ui_prov_list[0].pdev.uuid[11];
+            mac_addr[3] = ui_prov_list[0].pdev.uuid[10];
+            mac_addr[4] = ui_prov_list[0].pdev.uuid[9];
+            mac_addr[5] = ui_prov_list[0].pdev.uuid[8];
+            blebrr_create_gatt_conn_pl(0,mac_addr);
+            blebrr_gatt_mode_set(BLEBRR_GATT_PROV_MODE);
+        }
+
+        break;
+
+    /* GATT Bearer BLE Link Layer Connected */
+    case BLEBRR_GATT_IFACE_UP:
+        CONSOLE_OUT("\r\n >> GATT Bearer BLE Link Layer Connection Event Received!\r\n");
+        blebrr_timer_stop();
+        break;
+
+    case BLEBRR_GATT_IFACE_ENABLE:
+        if((blebrr_gatt_mode_get()==BLEBRR_GATT_PROV_MODE)&&(blebrr_prov_started == MS_TRUE))
+        {
+            API_RESULT retval;
+            retval = MS_prov_bind(PROV_BRR_GATT, &ui_prov_list[0].pdev, 30, &ui_prov_list[0].phandle);
+            printf("Retval - 0x%04X\n", retval);
+        }
+        else if((blebrr_gatt_mode_get()==BLEBRR_GATT_PROXY_MODE)&&(blebrr_prov_started == MS_TRUE))
+        {
+            #ifndef EASY_BOUNDING
+            /* Get the Composition data */
+            UI_config_client_get_composition_data(0x00);
+            #else
+            UI_config_client_appkey_add(0, 0, UI_appkey);
+            #endif
+        }
+
+        CONSOLE_OUT("\r\n >> GATT Bearer Active Event Received!\r\n");
+        break;
+
+    case BLEBRR_GATT_IFACE_DISABLE:
+        CONSOLE_OUT("\r\n >> GATT Bearer Inactive Event Received!\r\n");
+        break;
+
+    /* Unknown Event! */
+    default:
+        CONSOLE_OUT("\r\n >> GATT Bearer BLE Link Layer Unknown Event 0x%02X Received!\r\n", ev_name);
+        /* Do Nothing! */
+        break;
+    }
+}
+#endif
 void UI_register_prov(void)
 {
     API_RESULT retval;
@@ -1601,6 +1710,192 @@ void UI_setup_prov(UCHAR role, UCHAR brr)
         CONSOLE_OUT("Retval - 0x%04X\n", retval);
     }
 }
+#ifdef BLE_CLIENT_ROLE
+void UI_proxy_callback
+(
+    NETIF_HANDLE*        handle,
+    UCHAR                p_evt,
+    UCHAR*               data_param,
+    UINT16               data_len
+)
+{
+}
+
+void UI_register_proxy(void)
+{
+    API_RESULT retval;
+    CONSOLE_OUT("Registering with Proxy layer...\n");
+    retval =  MS_proxy_register(UI_proxy_callback);
+    CONSOLE_OUT("Retval - 0x%04X\n", retval);
+}
+
+API_RESULT UI_check_hash(MS_SUBNET_HANDLE handle,UINT8* hash,UINT8* random)
+{
+    API_RESULT  retval;
+    UINT16      pointer_entries,num;
+    UCHAR       id_key[16];
+    UCHAR       in_pdu[16];
+    UCHAR       t_out_pdu[16];
+    MS_NET_ADDR pri_addr;
+    UCHAR       marker;
+    INT32       ret;
+    retval = API_SUCCESS;
+    retval = MS_access_cm_get_subnet_identity_key
+             (
+                 handle,
+                 id_key
+             );
+    EM_mem_set(in_pdu, 0x0, sizeof(in_pdu));
+
+    if(retval == API_SUCCESS)
+    {
+        retval = MS_access_cm_get_prov_devices_list
+                 (
+                     &g_prov_dev_list[0],
+                     &g_num_entries,
+                     &pointer_entries
+                 );
+    }
+
+    if(g_num_entries == 0)
+    {
+        retval = API_FAILURE;
+    }
+
+    if (API_SUCCESS == retval)
+    {
+        for(num = 0; num < g_num_entries; num ++)
+        {
+            pri_addr = g_prov_dev_list[num].uaddr;
+            /* Initialize Marker: First 6 Bytes of ZERO padding */
+            marker = 6;
+            /* Copy the Random Number in next 8 bytes */
+            EM_mem_copy(&in_pdu[marker], random, 8);
+            marker += 8;
+            /* Copy the 2 Bytes of Unicast Addr of the Node */
+            MS_PACK_BE_2_BYTE_VAL(&in_pdu[marker], pri_addr);
+            marker += 2;
+            /* Generate the Hash */
+            cry_aes_128_encrypt_be
+            (
+                in_pdu,
+                id_key,
+                t_out_pdu,
+                ret
+            );
+
+            if (0 > ret)
+            {
+                printf(
+                    "[PROXY]: Node Identity Hash generation Failed with %d for Subnet Handle 0x%04X\n",
+                    ret, handle);
+                return API_FAILURE;
+            }
+
+//            printf(
+//                "[PROXY]: Generated Hash Value is:\n");
+//            appl_dump_bytes(t_out_pdu+8, 8);
+            if(EM_mem_cmp(t_out_pdu+8, hash, 8) == 0)
+            {
+//                printf("find node id beacon!!!\n");
+                retval = API_SUCCESS;
+                break;
+            }
+        }
+
+        if(num == g_num_entries)
+        {
+            retval = API_FAILURE;
+        }
+    }
+
+    return retval;
+}
+
+API_RESULT UI_check_networkid(MS_SUBNET_HANDLE handle,UINT8* networkid)
+{
+    API_RESULT  retval;
+    UCHAR  net_id[8];
+    retval = API_FAILURE;
+    /* Get the Network ID from Access Layer */
+    retval = MS_access_cm_get_subnet_network_id
+             (
+                 handle,
+                 net_id
+             );
+
+    if(retval == API_SUCCESS)
+    {
+        if(EM_mem_cmp(net_id, networkid, 8) == 0)
+        {
+            retval = API_SUCCESS;
+            printf("find network id\n");
+        }
+        else
+        {
+            retval = API_FAILURE;
+            printf("network id not match\n");
+        }
+    }
+
+    return retval;
+}
+
+
+
+void UI_proxy_beacon_callback
+(
+    PROXY_BCON_STATE_PARAMS*  data_param
+)
+{
+    API_RESULT retval;
+    UCHAR proxy_state;
+    MS_proxy_fetch_state(&proxy_state);
+
+    if(data_param->beacon_type == BRR_BCON_TYPE_PROXY_NODEID)
+    {
+        PROXY_BCON_NODEID_DATA* pram_p;
+        pram_p = (PROXY_BCON_NODEID_DATA*)data_param->beacon_data;
+        retval = UI_check_hash(0,pram_p->hash_data,pram_p->random_data);
+
+        if((retval == API_SUCCESS) && (proxy_state != MS_PROXY_CONNECTED))
+        {
+            if((blebrr_prov_started == MS_FALSE) ||
+                    ((pram_p->addr[0] == ui_prov_list[0].pdev.uuid[13])
+                     &&(pram_p->addr[1] == ui_prov_list[0].pdev.uuid[12])
+                     &&(pram_p->addr[2] == ui_prov_list[0].pdev.uuid[11])
+                     &&(pram_p->addr[3] == ui_prov_list[0].pdev.uuid[10])
+                     &&(pram_p->addr[4] == ui_prov_list[0].pdev.uuid[9])
+                     &&(pram_p->addr[5] == ui_prov_list[0].pdev.uuid[8])))
+            {
+                blebrr_create_gatt_conn_pl(0,pram_p->addr);
+            }
+        }
+    }
+    else
+    {
+        PROXY_BCON_NETWORKID_DATA* pram_p;
+        pram_p = (PROXY_BCON_NETWORKID_DATA*)data_param->beacon_data;
+        appl_dump_bytes(pram_p->network_id,8);
+        appl_dump_bytes(pram_p->addr,6);
+        retval = UI_check_networkid(0,pram_p->network_id);
+
+        if((retval == API_SUCCESS) && (blebrr_prov_started == MS_FALSE) && (proxy_state != MS_PROXY_CONNECTED))
+        {
+            blebrr_create_gatt_conn_pl(0,pram_p->addr);
+        }
+    }
+}
+
+
+void UI_register_proxy_bcon(void)
+{
+    API_RESULT retval;
+    CONSOLE_OUT("Registering with Proxy Beacon layer...\n");
+    retval =  MS_proxy_bcon_register(UI_proxy_beacon_callback);
+    CONSOLE_OUT("Retval - 0x%04X\n", retval);
+}
+#endif
 
 void appl_mesh_sample (void)
 {
@@ -1638,10 +1933,21 @@ void appl_mesh_sample (void)
     nvsto_init(NVS_FLASH_BASE1,NVS_FLASH_BASE2);
     ms_start_unicast_addr = UI_PROV_START_ADDRESS;
     ms_stop_unicast_addr = UI_PROV_STOP_ADDRESS;
+    /* Initialize Mesh config */
+    MS_limit_config();
     /* Initialize Mesh Stack */
     MS_init(config_ptr);
+    #ifdef BLE_CLIENT_ROLE
+    /* Initialize observer Proxy Beacon Handler */
+    MS_proxy_bcon_handler_register();
+    UI_register_proxy_bcon();
+    #endif
     /* Register with underlying BLE stack */
     blebrr_register();
+    #ifdef BLE_CLIENT_ROLE
+    /* Register GATT Bearer Connection/Disconnection Event Hook */
+    blebrr_register_gatt_iface_event_pl(UI_gatt_iface_event_pl_cb);
+    #endif
     /* Create Node */
     retval = MS_access_create_node(&node_id);
     /* Register Element */
@@ -1703,11 +2009,18 @@ void appl_mesh_sample (void)
     UI_set_publish_address(UI_prov_data.uaddr, UI_vendor_defined_client_model_handle,MS_FALSE);
     /* Configure as provisioner */
     UI_register_prov();
+    #ifdef BLE_CLIENT_ROLE
+    UI_register_proxy();
+    #endif
     /**
         setup <role:[1 - Device, 2 - Provisioner]> <bearer:[1 - Adv, 2 - GATT]
     */
     role = PROV_ROLE_PROVISIONER;
+    #ifdef BLE_CLIENT_ROLE
+    brr = PROV_BRR_GATT;
+    #else
     brr = PROV_BRR_ADV;
+    #endif
     UI_setup_prov(role, brr);
     blebrr_scan_enable();
     //IV index check

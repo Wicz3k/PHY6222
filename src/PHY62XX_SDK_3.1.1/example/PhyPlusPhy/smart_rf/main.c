@@ -138,7 +138,8 @@ static void hal_rfphy_init(void)
     g_rfPhyFreqOffSet   =RF_PHY_FREQ_FOFF_00KHZ;
     //============config xtal 16M cap
     XTAL16M_CAP_SETTING(0x09);
-    XTAL16M_CURRENT_SETTING(0x01);
+    XTAL16M_CURRENT_SETTING(0x03);
+    hal_rc32k_clk_tracking_init();
     hal_rom_boot_init();
     NVIC_SetPriority((IRQn_Type)BB_IRQn,    IRQ_PRIO_REALTIME);
     NVIC_SetPriority((IRQn_Type)TIM1_IRQn,  IRQ_PRIO_HIGH);     //ll_EVT
@@ -157,7 +158,6 @@ static void hal_init(void)
     hal_pwrmgr_init();
     xflash_Ctx_t cfg =
     {
-        .spif_ref_clk   =   SYS_CLK_RC_32M,
         .rd_instr       =   XFRD_FCMD_READ_DUAL
     };
     hal_spif_cache_init(cfg);

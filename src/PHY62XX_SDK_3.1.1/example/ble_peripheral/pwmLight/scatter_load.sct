@@ -6,7 +6,7 @@ LR_IROM1 0x1fff1838 0x0A7C8 {  ; load region size_region
  ER_IROM1 0x1fff1838 0x0A7C8  {  ; load address = execution address
   *.o (RESET, +First)
   *(InRoot$$Sections)
-  *.o(_section_standby_code_)
+  ;*.o(_section_standby_code_)
   *.o(_section_sram_code_)
   .ANY (+RO)  
   .ANY (+RW +ZI)
@@ -47,6 +47,6 @@ LR_ROM_XIP  0x11020000 0x020000 {
    devinfoservice.o(+RO)
    app_datetime.o(+RO)
    app_wrist.o(+RO)
-   *.o(_section_xip_code_)
+   *.o(_section_xip_code_, _func_xip_code_.*)
   }
  }  

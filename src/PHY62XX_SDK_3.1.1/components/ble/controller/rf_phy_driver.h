@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -133,6 +133,8 @@ extern volatile uint8_t   g_rc32kCalRes   ;
 /*
     0x4000f0c4 is AON-SLEEP_R[1], used for xtal tracking
 */
+#define AON_CLEAR_XTAL_TRACKING_AND_CALIB           AP_AON->SLEEP_R[1]=0
+
 #define AON_SAVE_RC32K_CALIB_FLG(x)                 subWriteReg(0x4000f0c4, 7, 7, (0x01&(x)))
 #define AON_LOAD_RC32K_CALIB_FLG                    (((*(volatile uint32_t*)0x4000f0c4) & 0x80) == 0x80)
 
@@ -217,7 +219,15 @@ extern volatile uint8_t   g_rc32kCalRes   ;
 #define RF_PHY_DTM_MODE_ATE_RESET                   0xef
 
 #define RF_PHY_DTM_MODE_ERROR                       254
-
+/*
+    RF_PHY_DTM_REG_READ:   FE 02 AA BB CC DD -> aabbccdd=read_reg(0xAABBCCDD)
+    RF_PHY_DTM_REG_RD_RSP: FE 82 aa bb cc dd
+    RF_PHY_DTM_REG_WRITE:  FE 01 AA BB CC DD aa bb cc dd -> write_reg(0xAABBCCDD,0xaabbccdd)
+*/
+#define RF_PHY_DTM_REG_RW_OPCODE                    0xFE
+#define RF_PHY_DTM_REG_READ                         0x01
+#define RF_PHY_DTM_REG_WRITE                        0x02
+#define RF_PHY_DTM_REG_RD_RSP                       0x81
 
 /*******************************************************************************
     CONSTANTS
@@ -283,13 +293,18 @@ extern volatile uint8_t   g_rc32kCalRes   ;
 #define RF_PHY_FREQ_FOFF_N200KHZ                    -50
 
 
-#define RF_PHY_DTM_MANUL_NULL                        0x00
-#define RF_PHY_DTM_MANUL_FOFF                        0x01
-#define RF_PHY_DTM_MANUL_TXPOWER                     0x02
-#define RF_PHY_DTM_MANUL_XTAL_CAP                    0x04
-#define RF_PHY_DTM_MANUL_MAX_GAIN                    0x08
+#define RF_PHY_DTM_MANUL_NULL                        0x0000
+#define RF_PHY_DTM_MANUL_FOFF                        0x0001
+#define RF_PHY_DTM_MANUL_TXPOWER                     0x0002
+#define RF_PHY_DTM_MANUL_XTAL_CAP                    0x0004
 
-#define RF_PHY_DTM_MANUL_ALL                         0xFF
+
+#define RF_PHY_DTM_CONFIG_MAX_GAIN                   0x0100
+#define RF_PHY_DTM_CONFIG_RX_STABLE_MOD              0x0200
+
+
+#define RF_PHY_DTM_MANUL_ALL                         0x00FF
+#define RF_PHY_DTM_MANUL_CONFIG_ALL                  0xFFFF
 /*******************************************************************************
     FUNCION DEFINE
 */
@@ -531,4 +546,117 @@ void        rf_phy_dtm_zigbee_pkt_gen(void);
 void TRNG_INIT(void);
 
 uint8_t TRNG_Rand(uint8_t* buf,uint8_t len);
+
+
+/**************************************************************************************
+    @fn          rf_phy_dtm_ext_tx_singleTone
+
+    @brief       This function process for rf phy direct test, test mode interup
+
+    input parameters
+
+    @param       txPower    :   rf tx power
+                rfChnIdx    :   rf channel = 2402+(rfChnIdx<<1)
+                rfFoff      :   rf freq offset = rfFoff*4KHz
+                xtal_cap    :   XTAL16M_CAP_SETTING
+                testTimeUs  :   test loop active time(ms)
+
+    output parameters
+
+    @param       none
+
+    @return      none
+*/
+void    rf_phy_dtm_ext_tx_singleTone(uint8_t txPower, uint8_t rfChnIdx,uint8_t xtal_cap,int8_t rfFoff,uint32 testTimeUs);
+
+
+/**************************************************************************************
+    @fn          rf_phy_dtm_ext_tx_modulation
+
+    @brief       This function process for rf phy direct test, test mode interup
+
+    input parameters
+
+    @param       txPower    :   rf tx power
+                rfChnIdx    :   rf channel = 2402+(rfChnIdx<<1)
+                xtal_cap    :   XTAL16M_CAP_SETTING
+                rfFoff      :   rf freq offset = rfFoff*4KHz
+                pktType     :   modulaiton data type, 0: prbs9, 1: 1111000: 2 10101010
+                testTimeUs  :   test loop active time(ms)
+
+    output parameters
+
+    @param       none
+
+    @return      none
+*/
+void    rf_phy_dtm_ext_tx_modulation(uint8_t txPower, uint8_t rfChnIdx,uint8_t xtal_cap,int8_t rfFoff,uint8_t pktType,uint32 testTimeUs);
+
+/**************************************************************************************
+    @fn          rf_phy_dtm_ext_tx_mt_burst
+
+    @brief       This function process for rf phy direct test, test mode interup
+
+    input parameters
+
+    @param      txPower     :   rf tx power
+                rfChnIdx    :   rf channel = 2402+(rfChnIdx<<1)
+                xtal_cap    :   XTAL16M_CAP_SETTING
+                rfFoff      :   rf freq offset = rfFoff*4KHz
+                pktType     :   modulaiton data type, 0: prbs9, 1: 1111000: 2 10101010
+                pktLength   :   pkt length(Byte)
+
+                txPktNum    :   burst pkt tx number
+                txPktIntv   :   txPkt intv,0 txPkt intv is pkt interval =  ceil((L+249)/625) * 625
+
+    output parameters
+
+    @param       none
+
+    @return      none
+*/
+void    rf_phy_dtm_ext_tx_mod_burst(uint8_t txPower, uint8_t rfChnIdx,uint8_t xtal_cap,int8_t rfFoff,
+                                    uint8_t pktType, uint8_t pktLength,uint32 txPktNum,uint32 txPktIntv);
+
+/**************************************************************************************
+    @fn          rf_phy_dtm_ext_rx_demod_burst
+
+    @brief       This function process for rf phy direct test, test mode interup
+
+    input parameters
+
+    @param       rfChnIdx       :   rf channel = 2402+(rfChnIdx<<1)
+                rfFoff          :   rf freq offset = rfFoff*4KHz
+                xtal_cap        :   XTAL16M_CAP_SETTING
+                pktLength       :   pkt length(Byte)
+                rxWindow        :   rx demod window length(us)
+                rxTimeOut       :   rx on time (ms)
+
+    output parameters
+
+    @param       rxEstFoff      :   rx demod estimated frequency offset
+                rxEstRssi       :   rx demod estimated rssi
+                rxEstCarrSens   :   rx demod estimated carrier sense
+                rxPktNum        :   rx demod received pkt number
+
+    @return      none
+*/
+void    rf_phy_dtm_ext_rx_demod_burst(uint8_t rfChnIdx,int8_t rfFoff,uint8_t xtal_cap,uint8_t pktLength,uint32 rxTimeOut,uint32 rxWindow,
+                                      uint16_t* rxEstFoff,uint8_t* rxEstRssi,uint8_t* rxEstCarrSens,uint16_t* rxPktNum);
+
+
+/**************************************************************************************
+    @fn          rf_phy_dtm_ext_acc_code_set
+
+    @brief       config the acc_code in rf phy dtm
+
+    input parameters
+
+    @param       acc_code        :   sync word
+
+    output parameters
+    @return      none
+*/
+void    rf_phy_dtm_ext_acc_code_set(uint32 accCode);
+
 #endif

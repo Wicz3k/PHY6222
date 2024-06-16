@@ -80,7 +80,7 @@
 */
 
 // The order in this table must be identical to the task initialization calls below in osalInitTask.
-const pTaskEventHandlerFn tasksArr[] =
+__ATTR_SECTION_SRAM__ const pTaskEventHandlerFn tasksArr[] =
 {
     LL_ProcessEvent,
     HCI_ProcessEvent,
@@ -98,7 +98,7 @@ const pTaskEventHandlerFn tasksArr[] =
     SimpleBLECentral_ProcessEvent
 };
 
-const uint8 tasksCnt = sizeof( tasksArr ) / sizeof( tasksArr[0] );
+__ATTR_SECTION_SRAM__ const uint8 tasksCnt = sizeof( tasksArr ) / sizeof( tasksArr[0] );
 uint16* tasksEvents;
 
 /*********************************************************************

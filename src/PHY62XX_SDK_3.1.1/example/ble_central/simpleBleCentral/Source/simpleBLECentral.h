@@ -72,8 +72,13 @@ extern "C"
 #define SLA_DATA_LENGTH_EVT                             0x0800
 #define SLA_PHY_MODE_EVT                                0x1000
 
-#define SBC_PERIODIC_EVT                                0x2000
+
+
+//#define SBC_PERIODIC_EVT                                0x2000
 #define START_CHAR_DATA_TEST                            0x4000
+
+
+#define SBC_DISCOVERY_SERVICE_TO_EVT                    0x2000
 
 //#define SBC_START_DISC                                0x0040
 

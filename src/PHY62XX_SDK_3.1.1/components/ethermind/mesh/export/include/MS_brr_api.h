@@ -148,6 +148,7 @@ typedef enum _BRR_BCON_TYPE
     /* Proxy beacon with Node Identity */
     BRR_BCON_TYPE_PROXY_NODEID,
 
+    BRR_BCON_TYPE_PROXY_PRIV,
     /** Number of Beacon types */
     BRR_BCON_COUNT
 
@@ -177,6 +178,15 @@ typedef struct _BRR_BEARER_INFO
     void       (*bearer_wakeup)(BRR_HANDLE*, UINT8 mode);
 
 } BRR_BEARER_INFO;
+
+/** Bearer information to register */
+typedef struct _BRR_BEARER_SERVICE_INFO
+{
+    /** Data Receive routine */
+    void       (*bearer_recv)(BRR_HANDLE*, UCHAR*, UINT16, MS_BUFFER* info);
+
+} BRR_BEARER_SERVICE_INFO;
+
 
 /** Bearer Beacon type data structure */
 typedef struct _BRR_BEACON_INFO
@@ -367,6 +377,11 @@ API_RESULT MS_brr_add_bearer
     /* OUT */ BRR_HANDLE*         brr_handle
 );
 
+API_RESULT MS_brr_add_service_bearer
+(
+    /* IN */  BRR_BEARER_SERVICE_INFO*    brr_info
+);
+
 /**
     \brief Remove a bearer from Bearer Layer
 
@@ -498,6 +513,41 @@ API_RESULT MS_brr_start_proxy_adv
     /* IN */ UCHAR*     data,
     /* IN */ UINT16     datalen
 );
+
+
+/**
+    \brief API to send Proxy Device ADV
+
+    \par Description
+    This routine sends Proxy Device ADV
+
+    \param [in] type
+           Proxy ADV Type:
+           0x00 - Network ID
+           0x01 - Node Identity
+
+    \param [in] data
+           Data to be advertised by Proxy.
+           If the "type" is:
+           0x00 - Network ID    - 8 Bytes of Network ID
+           0x01 - Node Identity - 8 Bytes Hash, 8 Bytes Random num
+
+    \param [in] datalen
+           Length of the data to be advertised by Proxy.
+           If the "type" is:
+           0x00 - Network ID    - 8 Bytes of Network ID
+           0x01 - Node Identity - 8 Bytes Hash, 8 Bytes Random num
+
+    \return API_SUCCESS or an error code indicating reason for failure
+*/
+
+API_RESULT MS_brr_start_priv_proxy_adv
+(
+    /* IN */ UCHAR      type,
+    /* IN */ UCHAR*     data,
+    /* IN */ UINT16     datalen
+);
+
 
 /**
     \brief API to disable broadcast of given beacon type

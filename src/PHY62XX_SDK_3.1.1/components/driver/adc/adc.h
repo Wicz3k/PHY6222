@@ -58,12 +58,14 @@ extern "C" {
 #define    ENABLE_ADC_INT       AP_ADCC->intr_mask |= 0x000001ff
 #define    MASK_ADC_INT         AP_ADCC->intr_mask &= 0xfffffe00
 
-#define    CLEAR_ADC_INT(n)     AP_ADC->intr_clear |= BIT(n)
+#define    CLEAR_ADC_INT(n)        AP_ADCC->intr_clear |= BIT(n)
+#define    CLEAR_ADC_INT_ALL      {AP_ADCC->intr_clear = 0x3ffff;}
 
-#define    IS_CLAER_ADC_INT_VOICE (AP_ADC->intr_clear & BIT(8))
-#define    IS_CLAER_ADC_INT(n)    (AP_ADC->intr_clear & BIT(n))
+#define    IS_CLAER_ADC_INT_VOICE (AP_ADCC->intr_clear & BIT(8))
+#define    IS_CLAER_ADC_INT(n)    (AP_ADCC->intr_clear & BIT(n))
 
-#define    GET_IRQ_STATUS         (AP_ADCC->intr_status & 0x3ff)
+
+
 
 #define    ENABLE_ADC             (AP_PCRM->ANA_CTL |= BIT(3))
 #define    DISABLE_ADC            (AP_PCRM->ANA_CTL &= ~BIT(3))
@@ -71,6 +73,17 @@ extern "C" {
 #define    ADC_CLOCK_ENABLE       (AP_PCRM->CLKHF_CTL1 |= BIT(13))
 #define    ADC_CLOCK_DISABLE       (AP_PCRM->CLKHF_CTL1 &= ~BIT(13))
 
+#define POLLING_MODE 0
+#define INTERRUPT_MODE 1
+#define CCOMPARE_MODE 2
+
+
+#define adcMeasureTask_Compare_EVT                    0x0080
+
+#define adcMeasureTask_Poilling_EVT                   0x0080
+
+
+#define adcMeasureTask_EVT                            0x0080
 
 #define ADC_USE_TIMEOUT 0
 #define ADC_OP_TIMEOUT  100
@@ -188,6 +201,7 @@ typedef struct _adc_Contex_t
 {
     bool        enable;
     uint8_t     all_channel;
+    uint8_t     chs_en_shadow;
     bool        continue_mode;
     adc_Hdl_t   evt_handler[ADC_CH_NUM];
 } adc_Ctx_t;
@@ -216,13 +230,33 @@ int hal_adc_config_channel(adc_Cfg_t cfg, adc_Hdl_t evt_handler);
 
 int hal_adc_clock_config(adc_CLOCK_SEL_t clk);
 
-int hal_adc_start(void);
+int hal_adc_start(uint8_t adc_mode);
 
 int hal_adc_stop(void);
+
+void hal_adc_value_read(adc_CH_t ch);
 
 void __attribute__((weak)) hal_ADC_IRQHandler(void);
 
 float hal_adc_value_cal(adc_CH_t ch,uint16_t* buf, uint32_t size, uint8_t high_resol, uint8_t diff_mode);
+
+int hal_adc_deinit(void);
+
+static void hal_adc_load_calibration_value(void);
+
+int hal_adc_compare_start(void);
+
+
+#define ADC_COMPARE_FILTER_MAX_TIME  10
+
+
+static void adc_compare_cb(uint16_t ch,uint32_t status);
+static void __attribute__((used)) hal_ADC_compare_IRQHandler(void);
+int hal_poilling_adc_stop(void);
+extern int hal_adc_compare_enable(adc_CH_t ch,uint32_t flag,uint32_t th_high,uint32_t th_low);
+extern  int hal_adc_comppare_reset(adc_CH_t ch);
+extern bool adc_get_high_threshold_flag(void);
+void clear_adcc_cfg(void);
 
 #ifdef __cplusplus
 }

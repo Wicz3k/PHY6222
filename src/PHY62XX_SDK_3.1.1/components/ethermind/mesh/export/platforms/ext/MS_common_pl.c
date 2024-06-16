@@ -27,7 +27,7 @@
 
 /* ------------------------------------------- Functions */
 /* EtherMind-Init: Platform Handler */
-void ms_init_pl (void)
+__ATTR_SECTION_XIP__ void ms_init_pl (void)
 {
 }
 
@@ -38,13 +38,6 @@ __ATTR_SECTION_XIP__ UINT8  MS_common_reset(void)
     retval = MS_TRUE;
     MS_access_cm_get_features_field(&proxy, MS_FEATURE_PROXY);
     MS_proxy_fetch_state(&proxy_state);
-
-    if((MS_TRUE == proxy) && (proxy_state == MS_PROXY_CONNECTED))
-    {
-        blebrr_disconnect_pl();
-        retval = MS_FALSE;
-    }
-
     #if(BLEMESH_ROLE == PROV_ROLE_PROVISIONER)
     MS_access_cm_reset(PROV_ROLE_PROVISIONER);
     #else

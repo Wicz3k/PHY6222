@@ -44,7 +44,7 @@
 #include "i2c_slave.h"
 #include "gpio.h"
 #include "error.h"
-#include "osal.h"
+#include "OSAL.h"
 #include "clock.h"
 #include "log.h"
 

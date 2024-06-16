@@ -86,6 +86,7 @@
 #include "access_extern.h"
 #include "cli_model.h"
 #include "flash.h"
+#include "global_config.h"
 
 /*********************************************************************
     MACROS
@@ -145,8 +146,7 @@ static gapDevDiscReq_t bleMesh_scanparam;
 static gapAdvertisingParams_t bleMesh_advparam;
 
 static UCHAR bleMesh_DiscCancel = FALSE;             // HZF todo, not use???
-
-UCHAR cmdstr[64];
+UCHAR cmdstr[CLI_MAX_ARGS];
 UCHAR cmdlen;
 DECL_CONST CLI_COMMAND cli_cmd_list[] =
 {
@@ -162,6 +162,9 @@ DECL_CONST CLI_COMMAND cli_cmd_list[] =
     /*display key */
     { "key", "display key", cli_disp_key },
 
+    /*reset mesh stack clear */
+    { "mshstackclr", "mesh stack reset", cli_mesh_stack_clear },
+
     /*heartbeat set */
     { "hbeart", "heartbeat set", cli_modelc_config_heartbeat_publication_set },
 
@@ -169,7 +172,11 @@ DECL_CONST CLI_COMMAND cli_cmd_list[] =
     { "ATMSH80", "raw data", cli_raw_data },
 
     /*get information */
-    { "ATMSH81", "get information", cli_get_information }
+    { "ATMSH81", "get information", cli_get_information },
+
+    /*send pdu */
+    { "ATMSH82", "send pdu", cli_send_pdu },
+
 };
 
 /*********************************************************************
@@ -200,7 +207,7 @@ void bleMesh_Init( uint8 task_id )
     // Register for direct HCI messages
     //HCI_GAPTaskRegister(bleMesh_TaskID);
     GAP_ParamsInit (bleMesh_TaskID, (GAP_PROFILE_PERIPHERAL | GAP_PROFILE_CENTRAL));
-    GAP_CentDevMgrInit(0x80);
+    GAP_CentDevMgrInit(0x40);
     GAP_PeriDevMgrInit();
     GAP_CentConnRegister();
     // Set the GAP Characteristics
@@ -209,7 +216,6 @@ void bleMesh_Init( uint8 task_id )
     GGS_AddService( GATT_ALL_SERVICES );            // GAP
     GATTServApp_AddService( GATT_ALL_SERVICES );    // GATT attributes
     DevInfo_AddService();                           // Device Information Service
-    ota_app_AddService();
     GATTServApp_RegisterForMsg(task_id);
     bleMesh_uart_init();
     osal_set_event( bleMesh_TaskID, BLEMESH_START_DEVICE_EVT );
@@ -286,11 +292,11 @@ uint16 bleMesh_ProcessEvent( uint8 task_id, uint16 events )
 
     if (events & BLEMESH_UART_RX_EVT)
     {
-        if ('\r' == cmdstr[cmdlen - 1])
+        if ('\r' == cmdstr[cmdlen - 1]||'\n' == cmdstr[cmdlen - 1])
         {
             cmdstr[cmdlen - 1] = '\0';
             printf("%s", cmdstr);
-            CLI_process_line
+            CLI_process_line_manual
             (
                 cmdstr,
                 cmdlen
@@ -349,10 +355,6 @@ static void bleMesh_ProcessOSALMsg( osal_event_hdr_t* pMsg )
 
     case GATT_MSG_EVENT:
         bleMesh_ProcessGATTMsg( (gattMsgEvent_t*)pMsg );
-        /* Invoke the Mesh Client GATT Msg Handler */
-        #ifdef BLE_CLIENT_ROLE
-        mesh_client_process_gattMsg((gattMsgEvent_t*)pMsg, bleMesh_TaskID);
-        #endif
         break;
 
     default:
@@ -507,6 +509,11 @@ static void bleMesh_ProcessGAPMsg( gapEventHdr_t* pMsg )
     {
         osal_stop_timerEx(bleMesh_TaskID, BLEMESH_GAP_MSG_EVT);
         blebrr_timer_stop();
+
+        if(BLEBRR_GET_STATE() == BLEBRR_STATE_ADV_ENABLED)
+            BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
+
+        blebrr_scan_enable();
         gapEstLinkReqEvent_t* pPkt = (gapEstLinkReqEvent_t*)pMsg;
         printf("\r\n GAP_LINK_ESTABLISHED_EVENT received! \r\n");
 
@@ -569,7 +576,7 @@ bStatus_t BLE_gap_set_scan_params
     GAP_SetParamValue( TGAP_GEN_DISC_SCAN_WIND, scan_window );
     GAP_SetParamValue( TGAP_GEN_DISC_SCAN_INT, scan_interval );
     GAP_SetParamValue( TGAP_FILTER_ADV_REPORTS, FALSE);
-    GAP_SetParamValue( TGAP_GEN_DISC_SCAN, 5000 );
+    GAP_SetParamValue( TGAP_GEN_DISC_SCAN, 100 );
     GAP_SetParamValue( TGAP_CONN_SCAN_INT,scan_interval );
     GAP_SetParamValue( TGAP_CONN_SCAN_WIND,scan_window);
     //GAP_SetParamValue( TGAP_LIM_DISC_SCAN, 0xFFFF );
@@ -594,6 +601,7 @@ bStatus_t BLE_gap_set_scan_enable
 
         if (0 == ret)
         {
+            bleMesh_DiscCancel = FALSE;
             osal_set_event (bleMesh_TaskID, BLEMESH_GAP_SCANENABLED);
         }
     }
@@ -601,7 +609,7 @@ bStatus_t BLE_gap_set_scan_enable
     {
         ret = GAP_DeviceDiscoveryCancel(bleMesh_TaskID);
 
-        if (0 == ret)
+        if ((0 == ret) ||(bleIncorrectMode == ret))
         {
             bleMesh_DiscCancel = TRUE;
             osal_start_timerEx(bleMesh_TaskID, BLEMESH_GAP_MSG_EVT, 10*1000);
@@ -728,9 +736,18 @@ void bleMesh_GAPMsg_Timeout_Process(void)
 
 static void ProcessUartData(uart_Evt_t* evt)
 {
-    osal_memcpy((cmdstr + cmdlen), evt->data, evt->len);
-    cmdlen += evt->len;
-    osal_set_event( bleMesh_TaskID, BLEMESH_UART_RX_EVT );
+    UCHAR c_len = cmdlen + evt->len;
+
+    if(c_len < sizeof(cmdstr))
+    {
+        osal_memcpy((cmdstr + cmdlen), evt->data, evt->len);
+        cmdlen += evt->len;
+        osal_set_event( bleMesh_TaskID, BLEMESH_UART_RX_EVT );
+    }
+    else
+    {
+        cmdlen = 0;
+    }
 }
 
 void bleMesh_uart_init(void)

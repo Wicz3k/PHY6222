@@ -1,4 +1,4 @@
-/**
+﻿/**
     \file appl_time_server.c
 */
 
@@ -11,20 +11,22 @@
 
 /* --------------------------------------------- Header File Inclusion */
 #include "appl_time_server.h"
-#include "appl_model_state_handler.h"
+#include "appl_time_state_handler.h"
 
 
 /* --------------------------------------------- Global Definitions */
 
 
 /* --------------------------------------------- Static Global Variables */
-static const char main_time_server_options[] = "\n\
-======== Time Server Menu ========\n\
-     0. Exit. \n\
-     1. Refresh. \n\
- \n\
- \n\
-Your Option ? \0";
+#if 0
+    static const char main_time_server_options[] = "\n\
+    ======== Time Server Menu ========\n\
+    0. Exit. \n\
+    1. Refresh. \n\
+    \n\
+    \n\
+    Your Option ? \0";
+#endif
 
 
 /* --------------------------------------------- External Global Variables */
@@ -33,6 +35,7 @@ static MS_ACCESS_MODEL_HANDLE   appl_time_setup_server_model_handle;
 
 
 /* --------------------------------------------- Function */
+#if 0
 /* time server application entry point */
 void main_time_server_operations(/* IN */ UINT8 have_menu)
 {
@@ -106,8 +109,39 @@ void main_time_server_operations(/* IN */ UINT8 have_menu)
         }
     }
 }
+#endif
 
-#if 0
+API_RESULT appl_time_server_init(MS_ACCESS_ELEMENT_HANDLE ehdl)
+{
+    API_RESULT rslt;
+    rslt = MS_time_server_init(
+               ehdl,
+               &appl_time_server_model_handle,
+               &appl_time_setup_server_model_handle,
+               appl_time_server_cb
+           );
+
+    if (API_SUCCESS == rslt)
+    {
+        appl_time_states_initialization();
+        CONSOLE_OUT(
+            "Time Server Initialized. Model Handle: 0x%04X\n",
+            appl_time_server_model_handle);
+        CONSOLE_OUT(
+            "Time Setup Server Initialized. Model Handle: 0x%04X\n",
+            appl_time_setup_server_model_handle);
+    }
+    else
+    {
+        CONSOLE_OUT(
+            "[ERR] Time Server Initialization Failed. Result: 0x%04X\n",
+            rslt);
+    }
+
+    return ( rslt );
+}
+
+#if 1
 /**
     \brief Server Application Asynchronous Notification Callback.
 
@@ -174,7 +208,7 @@ API_RESULT appl_time_server_cb
             break;
         }
 
-        appl_model_state_get(state_params->state_type, 0, param, 0);
+        appl_time_state_get(state_params->state_type, 0, param, 0);
         current_state_params.state_type = state_params->state_type;
         current_state_params.state = param;
     }
@@ -182,7 +216,7 @@ API_RESULT appl_time_server_cb
     {
         CONSOLE_OUT(
             "[TIME] SET Request.\n");
-        appl_model_state_set(state_params->state_type, 0, state_params->state, 0);
+        appl_time_state_set(state_params->state_type, 0, state_params->state, 0);
         current_state_params.state_type = state_params->state_type;
         current_state_params.state = state_params->state;
     }
@@ -198,5 +232,4 @@ API_RESULT appl_time_server_cb
 
     return retval;
 }
-
 #endif /* 0 */

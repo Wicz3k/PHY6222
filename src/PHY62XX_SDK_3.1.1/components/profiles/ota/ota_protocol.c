@@ -144,8 +144,11 @@ typedef struct
 } ota_context_t;
 
 #define OTA_PBUF_SIZE (16*1024+16)
-uint8_t ota_patition_buffer[OTA_PBUF_SIZE] __attribute__((section("ota_partition_buffer_area")));
-
+#if defined(__GNUC__)
+    uint8_t* ota_patition_buffer = (uint8_t*)0x1fffb300;
+#else
+    uint8_t ota_patition_buffer[OTA_PBUF_SIZE] __attribute__((section("ota_partition_buffer_area")));
+#endif
 static uint16_t s_ota_burst_size = 16;
 
 static bool s_ota_resource = FALSE;
@@ -162,7 +165,7 @@ extern bool finidv(void);
 extern llStatus_t LL_Rand( uint8* randData,
                            uint8 dataLen );
 
-extern void LL_ENC_AES128_Encrypt0( uint8* key,uint8* plaintext,uint8* ciphertext );
+extern void LL_ENC_AES128_Encrypt( uint8* key,uint8* plaintext,uint8* ciphertext );
 bool is_encrypt = FALSE;
 
 static void start_timer(uint32_t timeout)
@@ -433,7 +436,7 @@ void process_ctrl_cmd(uint8_t* cmdbuf, uint8_t size)
         osal_memset(s_ota_ctx.m_key,0,sizeof(s_ota_ctx.m_key));
         osal_memcpy(s_ota_ctx.m_key, cmd.p.ver_key,sizeof(s_ota_ctx.m_key));
         LL_Rand((uint8_t*)s_ota_ctx.s_random, sizeof(s_ota_ctx.s_random));
-        LL_ENC_AES128_Encrypt0((uint8_t*)g_ota_sec_key,s_ota_ctx.s_random,s_ota_ctx.s_key);
+        LL_ENC_AES128_Encrypt((uint8_t*)g_ota_sec_key,s_ota_ctx.s_random,s_ota_ctx.s_key);
         response_param(OTA_RSP_SEC_CONFIRM,s_ota_ctx.s_key,sizeof(s_ota_ctx.s_key));
         break;
 
@@ -447,7 +450,7 @@ void process_ctrl_cmd(uint8_t* cmdbuf, uint8_t size)
         osal_memset(s_ota_ctx.m_random,0,sizeof(s_ota_ctx.m_random));
         osal_memcpy(s_ota_ctx.m_random,cmd.p.random,sizeof(s_ota_ctx.m_random));
         uint8_t key[16];
-        LL_ENC_AES128_Encrypt0((uint8_t*)g_ota_sec_key,s_ota_ctx.m_random,key);
+        LL_ENC_AES128_Encrypt((uint8_t*)g_ota_sec_key,s_ota_ctx.m_random,key);
 
         if(osal_memcmp(key,s_ota_ctx.m_key,sizeof(key))==0)
         {
@@ -469,8 +472,8 @@ void process_ctrl_cmd(uint8_t* cmdbuf, uint8_t size)
         osal_memset(s_ota_ctx.m_confirm,0,sizeof(s_ota_ctx.m_confirm));
         osal_memcpy(s_ota_ctx.m_confirm,cmd.p.confirm,sizeof(s_ota_ctx.m_confirm));
         uint8_t random_key[16];
-        LL_ENC_AES128_Encrypt0(s_ota_ctx.m_random,s_ota_ctx.s_random,random_key);
-        LL_ENC_AES128_Encrypt0((uint8_t*)g_ota_sec_key,random_key,s_ota_ctx.s_confirm);
+        LL_ENC_AES128_Encrypt(s_ota_ctx.m_random,s_ota_ctx.s_random,random_key);
+        LL_ENC_AES128_Encrypt((uint8_t*)g_ota_sec_key,random_key,s_ota_ctx.s_confirm);
 
         if(osal_memcmp(s_ota_ctx.s_confirm,s_ota_ctx.m_confirm,sizeof(s_ota_ctx.s_confirm))==0)
         {
@@ -1061,6 +1064,8 @@ void process_service_evt(ota_Evt_t* pev)
         break;
     }
 }
+
+#if   defined ( __CC_ARM )
 #define __APP_RUN_ADDR__ (0x1FFF1838)
 __asm void __attribute__((section("ota_app_loader_area"))) otaProtocol_RunApp(void)
 {
@@ -1069,6 +1074,15 @@ __asm void __attribute__((section("ota_app_loader_area"))) otaProtocol_RunApp(vo
               BX R1
               ALIGN
 }
+#elif defined ( __GNUC__ )
+void __attribute__((section("ota_app_loader_area"))) otaProtocol_RunApp(void)
+{
+    __ASM volatile("\tldr r0, =0x1FFF1838\n\t"
+                   "ldr r1, [r0, #4]\n\t"
+                   "bx r1"
+                  );
+}
+#endif
 
 int __attribute__((section("ota_app_loader_area"))) run_application(void)
 {

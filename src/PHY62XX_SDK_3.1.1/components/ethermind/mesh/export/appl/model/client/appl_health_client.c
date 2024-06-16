@@ -1,4 +1,4 @@
-/**
+﻿/**
     \file appl_health_client.c
 
     \brief This file defines the Mesh Health Model Application Interface
@@ -409,7 +409,7 @@ void appl_health_client_set_publish_address(void)
     ("Enter Network Index (0 if part of a single network)\n");
     CONSOLE_IN
     ("%d", &choice);
-    publish_info.appkey_index = (UINT16)(MS_CONFIG_LIMITS(MS_MAX_APPS) + choice);
+    publish_info.appkey_index = (UINT16)(ms_max_apps + choice);
     publish_info.remote = MS_FALSE;
     retval = MS_access_cm_set_model_publication
              (

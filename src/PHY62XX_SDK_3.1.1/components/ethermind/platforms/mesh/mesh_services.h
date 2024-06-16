@@ -115,6 +115,7 @@ enum mesh_proxy_idx_att
     MESH_PROXY_IDX_NB,
 };
 
+
 /* Define the available custom service states */
 enum mesh_serv_state
 {
@@ -181,6 +182,7 @@ typedef struct
     mesh_proxy_data_out_ccd_cb            proxy_data_out_ccd_cb;
 
 } mesh_proxy_cb;
+
 
 /*  ----------------------------------------------------------------------------
     Function prototype definitions

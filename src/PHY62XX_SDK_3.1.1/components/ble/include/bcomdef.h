@@ -104,21 +104,7 @@ extern "C"
     //#endif
 */
 
-#if !defined ( MAX_NUM_LL_CONN )
-#if ( CTRL_CONFIG & INIT_CFG )
-#define MAX_NUM_LL_CONN                       8
-#elif ( !( CTRL_CONFIG & INIT_CFG ) && ( CTRL_CONFIG & ADV_CONN_CFG ) )
-#define MAX_NUM_LL_CONN                       1
-#else // no connection needed
-#define MAX_NUM_LL_CONN                       0
-#endif // CTRL_CONFIG=INIT_CFG
-#endif // !MAX_NUM_LL_CONN
-
 #define MAX_NUM_LL_CONN_ROM_LIMT                 16          //hard code for BBB ROM define
-
-#if (MAX_NUM_LL_CONN_ROM_LIMT<MAX_NUM_LL_CONN)
-#warning "MAX_NUM_LL_CONN > MAX_NUM_LL_CONN_ROM"
-#endif
 
 /** @defgroup BLE_COMMON_DEFINES BLE Common Defines
     @{

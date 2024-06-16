@@ -40,9 +40,15 @@
 #include "error.h"
 
 
-#define GPIO_GREEN    P32
-#define GPIO_BLUE     P23
-#define GPIO_RED      P31
+#if (SDK_VER_CHIP == __DEF_CHIP_QFN32__)
+    #define GPIO_GREEN    P32
+    #define GPIO_BLUE     P33
+    #define GPIO_RED      P31
+#else
+    #define GPIO_GREEN    P3
+    #define GPIO_BLUE     P7
+    #define GPIO_RED      P2
+#endif
 
 
 

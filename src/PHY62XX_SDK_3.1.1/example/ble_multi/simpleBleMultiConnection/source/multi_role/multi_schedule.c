@@ -39,7 +39,6 @@
 /*******************************************************************************************************
     @ Description    :  macro define
  *******************************************************************************************************/
-#define MULTI_SCH_DELAY         500     // unit ms
 #define MULTI_SCH_ADV_DURATION_TIME     4 //ms
 
 
@@ -56,42 +55,42 @@ extern uint8 gapMultiRole_TaskID;
 /*******************************************************************************************************
     @ Description    :  multi role local typedef -- role type
  *******************************************************************************************************/
-typedef enum
-{
-    advertiser = 1,
-    scanner,
-    initiator
-} GAPMultiRole_type;
+// typedef enum
+// {
+//     advertiser = 1,
+//     scanner,
+//     initiator
+// } GAPMultiRole_type;
 
 /*******************************************************************************************************
     @ Description    :  multi role local typedef -- schedule list
  *******************************************************************************************************/
-typedef struct multiList
-{
-    GAPMultiRole_type   role;
-    uint8   busy;
-    union
-    {
-        struct
-        {
-            uint8   perIdx;     // g_MultiPeriInfo index
-            uint8   DatConfUpd; // advertising data and scan response data
-            // configure and update status @ref macro def
-            // GAPMULTI_UPDATEADV_FLAG ...
-            GAPMultiRole_states_t state;
-        } adv;
-        struct
-        {
-            uint8 scanning;     // is scanning now?
-        } scan;
-        struct
-        {
-            uint8 initiating;
-        } initiate;
-    } roleScd;                  // role scheduler parameter
-    uint32 nextScdTime;         // next multi schedule time unit milliseconds
-    struct multiList* next;
-} multiScehdule_t;
+// typedef struct multiList
+// {
+//     GAPMultiRole_type   role;
+//     uint8   busy;
+//     union
+//     {
+//         struct
+//         {
+//             uint8   perIdx;     // g_MultiPeriInfo index
+//             uint8   DatConfUpd; // advertising data and scan response data
+//             // configure and update status @ref macro def
+//             // GAPMULTI_UPDATEADV_FLAG ...
+//             GAPMultiRole_states_t state;
+//         } adv;
+//         struct
+//         {
+//             uint8 scanning;     // is scanning now?
+//         } scan;
+//         struct
+//         {
+//             uint8 initiating;
+//         } initiate;
+//     } roleScd;                  // role scheduler parameter
+//     uint32 nextScdTime;         // next multi schedule time unit milliseconds
+//     struct multiList* next;
+// } multiScehdule_t;
 
 
 /*******************************************************************************************************
@@ -166,7 +165,7 @@ multiScehdule_t* multiRole_findBusyNode(  void);
     @author          :  PHY
  *******************************************************************************************************
  *******************************************************************************************************/
-uint8 muliSchedule_config(uint8 mode, uint8 en_flag)
+uint8 muliSchedule_config(uint8 mode, uint32 en_flag)
 {
     uint8 ret = SCH_INVALID_ERROR_CODE;
     uint8 pSchLen = multiRole_cacLen_list( MULTI_SCH_MODE );
@@ -230,7 +229,7 @@ uint8 muliSchedule_config(uint8 mode, uint8 en_flag)
         {
             // disable advertising scheduler
             // flag enable delete the node from the schedule list
-            uint8 delFlag = FALSE;
+            uint32 delFlag = FALSE;
 
             for(uint8 i=0; i< pAdvParamLen ; i++)
             {
@@ -579,6 +578,42 @@ multiScehdule_t* multiRole_findBusyNode( void )
     return NULL;
 }
 
+multiScehdule_t* multiRole_findAdvNode( void )
+{
+    multiScehdule_t* node = multiRole_search_phead( MULTI_SCH_MODE );
+
+    while( node )
+    {
+        LOG("node = %p busy_state = %d  node role = %d\n",node,node->busy,node->role);
+
+        if( node->role == advertiser )
+            return node;
+        else
+            node = node->next;
+    }
+
+    return NULL;
+}
+
+///2022 08 05
+uint8_t multiRole_findInitScanNode( void )
+{
+    uint8_t len = 0;
+    multiScehdule_t* node = multiRole_search_phead( MULTI_SCH_MODE );
+
+    while( node )
+    {
+        if(node->role == initiator || node->role == scanner)
+        {
+            len++;
+            node = node->next;
+        }
+        else
+            node = node->next;
+    }
+
+    return len;
+}
 /*******************************************************************************************************
  *******************************************************************************************************
     @ Description    :
@@ -757,12 +792,11 @@ void multiRole_insert_node(uint8 mode,uint16 param, uint16 idx_len, void* pValue
         {
             while( node != NULL)
             {
-                LOG("node %p\n",node);
-
+//                LOG("node %p\n",node);
                 if( node->next == NULL )
                 {
                     node->next = insNode;
-                    LOG("node->next->next %p\n",node->next->next);
+//                    LOG("node->next->next %p\n",node->next->next);
                     break;
                 }
 
@@ -788,7 +822,7 @@ void multiRole_insert_node(uint8 mode,uint16 param, uint16 idx_len, void* pValue
         uint16 advIntv = GAP_GetParamValue( TGAP_GEN_DISC_ADV_INT_MIN );
 
         if( advCnt > 0 )
-            insNode->nextScdTime = ( (uint32)advIntv * 0.625 ) - ( MULTI_SCH_ADV_DURATION_TIME * advCnt );
+            insNode->nextScdTime = ( (uint32)advIntv * 0.625 ) - ( MULTI_SCH_ADV_DURATION_TIME);
         else
             insNode->nextScdTime = GAP_GetParamValue(TGAP_GEN_DISC_SCAN);
     }
@@ -805,12 +839,11 @@ void multiRole_insert_node(uint8 mode,uint16 param, uint16 idx_len, void* pValue
         {
             while( node != NULL)
             {
-                LOG("node %p\n",node);
-
+//                LOG("node %p\n",node);
                 if( node->next == NULL )
                 {
                     node->next = insNode;
-                    LOG("node->next->next %p\n",node->next->next);
+//                    LOG("node->next->next %p\n",node->next->next);
                     break;
                 }
 
@@ -837,7 +870,7 @@ void multiRole_insert_node(uint8 mode,uint16 param, uint16 idx_len, void* pValue
 
         // nextScdTime seems to be create connection timeout ,units :ms
         if( advCnt > 0 )
-            insNode->nextScdTime = ( (uint32)advIntv * 0.625 ) - ( MULTI_SCH_ADV_DURATION_TIME * advCnt );
+            insNode->nextScdTime = ( (uint32)advIntv * 0.625 ) - ( MULTI_SCH_ADV_DURATION_TIME );
         else
             insNode->nextScdTime = 10000;
     }
@@ -854,11 +887,16 @@ void multiRole_insert_node(uint8 mode,uint16 param, uint16 idx_len, void* pValue
 
         if( ( node!= NULL)&& (node->role == advertiser ))
         {
-            // temporary node->next
-            temp = node->next;
+            /// Insert adv Nodes in sequence
+            while (node->role == advertiser && node != NULL)
+            {
+                temp = node;
+                node = node->next;
+            }
+
+            insNode->next = node;
             // set the next node
-            insNode->next = temp;
-            node->next = insNode;
+            temp->next = insNode;
         }
         // 2-2. there's no advertising schedule node,then insert the advertising node in the first
         else
@@ -886,7 +924,9 @@ void multiRole_insert_node(uint8 mode,uint16 param, uint16 idx_len, void* pValue
         uint8 advEvtType;
         GAPMultiRole_GetParameter(GAPMULTIROLE_ADV_EVENT_TYPE, &advEvtType);
 
-        if( advEvtType == LL_ADV_CONNECTABLE_UNDIRECTED_EVT )
+        if( (advEvtType == LL_ADV_CONNECTABLE_UNDIRECTED_EVT) ||
+                (advEvtType == LL_ADV_SCANNABLE_UNDIRECTED_EVT) ||
+                (advEvtType == LL_ADV_NONCONNECTABLE_UNDIRECTED_EVT))
             insNode->roleScd.adv.DatConfUpd = GAPMULTI_UPDATEADV_FLAG | GAPMULTI_UPDATESRD_FLAG;
     }
     break;
@@ -1100,7 +1140,7 @@ static void multiScheduleAdv(multiScehdule_t* node)
         else
             LOG("gap make discoverable done error %d\n",ret);
     }
-    else
+    else if(node->roleScd.adv.state == GAPMULTIROLE_ADVERTISING )
     {
         ret = GAP_EndDiscoverable(sch_tsk_id);
         node->nextScdTime = 0;
@@ -1112,8 +1152,13 @@ static void multiScheduleAdv(multiScehdule_t* node)
         }
         else
         {
+            LOG("error node :%p\n",node);
             LOG("gap end  discoverable done error %d\n",ret);
         }
+    }
+    else
+    {
+        LOG("nothing to do\n");
     }
 }
 
@@ -1137,7 +1182,7 @@ void multiConfigSchAdv_param(uint8 opcode,uint8 status,uint8 advType )
 {
     multiScehdule_t* node = multiRole_findBusyNode();
 //  LOG("%s,node %p\n",__func__,node);
-    uint32 nextScdTime = 0;
+    uint32 nextScdTime = MULTI_SCH_ADV_DURATION_TIME;
 
     if( node )
     {
@@ -1190,13 +1235,38 @@ void multiConfigSchAdv_param(uint8 opcode,uint8 status,uint8 advType )
                 // assume that only one node active
                 if( node->next != NULL )
                 {
-                    node->next->busy = TRUE;
+                    /// 1.find scan or init role
+                    while (node->next->role == advertiser)
+                    {
+                        node = node->next;
+                    }
+
+                    /// 2.if found,schedule after MULTI_SCH_ADV_DURATION_TIME times
+                    if(node->next != NULL)
+                    {
+                        node->next->busy = TRUE;
+                    }
+                    /// 3.if not fuond,schdule after adv interval times
+                    else
+                    {
+                        uint16 advIntv = GAP_GetParamValue( TGAP_GEN_DISC_ADV_INT_MIN );
+                        nextScdTime = ( (uint32)advIntv * 0.625 ) - MULTI_SCH_ADV_DURATION_TIME;
+                    }
                 }
                 else
                 {
                     // 2 advertising case
                     if( multiRole_search_phead( MULTI_SCH_MODE ) != NULL )
-                        mSche->busy = TRUE;
+                    {
+                        ///if role is advertiser,schdule after adv interval times
+                        if(mSche->role == advertiser)
+                        {
+                            uint16 advIntv = GAP_GetParamValue( TGAP_GEN_DISC_ADV_INT_MIN );
+                            nextScdTime = ( (uint32)advIntv * 0.625 ) - MULTI_SCH_ADV_DURATION_TIME;
+                        }
+                        else
+                            mSche->busy = TRUE;
+                    }
                 }
 
 //                  LOG("GAP_EndDiscoverable Done \n");
@@ -1213,60 +1283,8 @@ void multiConfigSchAdv_param(uint8 opcode,uint8 status,uint8 advType )
     if( multiRole_search_phead(MULTI_SCH_MODE) == NULL )
         return;
 
-    if( ( 1 ==  multiRole_cacLen_list( MULTI_SCH_MODE ) ) &&
-            ( node->role == advertiser) && (node->roleScd.adv.state == GAPMULTIROLE_ADVERTISING))
-    {
-        // adv
-        // if the length of schedule list is 1 and is in advertising state
-        // so not schedule,
-    }
-    else if( 2 ==  multiRole_cacLen_list( MULTI_SCH_MODE ) )
-    {
-        // if the length of schedule list is 2 and is in advertising state
-        if( ( node->next->role != advertiser) && (node->roleScd.adv.state == GAPMULTIROLE_ADVERTISING) )
-        {
-            // node->next->role != advertiser -->
-            // adv + adv
-            uint16 advIntv = GAP_GetParamValue( TGAP_GEN_DISC_ADV_INT_MIN );
-            nextScdTime = ( (uint32)advIntv * 0.625 ) - ( MULTI_SCH_ADV_DURATION_TIME * 2 );
-        }
-        else
-        {
-            // adv + scan
-            // advertising done,start scan immediately
-            nextScdTime = 0;
-        }
-
-        // adv + init
-
-        if( nextScdTime > 0 )
-            osal_start_timerEx(sch_tsk_id,MULTI_SCHEDULE_EVT,nextScdTime );
-        else
-//          osal_set_event(sch_tsk_id,MULTI_SCHEDULE_EVT);
-            osal_start_timerEx(sch_tsk_id,MULTI_SCHEDULE_EVT,MULTI_SCH_ADV_DURATION_TIME );
-    }
-    else if( 3 ==  multiRole_cacLen_list( MULTI_SCH_MODE ) )
-    {
-        // 1. adv + adv + scan
-        if( nextScdTime > 0 )
-            osal_start_timerEx(sch_tsk_id,MULTI_SCHEDULE_EVT,nextScdTime );
-        else
-//          osal_set_event(sch_tsk_id,MULTI_SCHEDULE_EVT);
-            osal_start_timerEx(sch_tsk_id,MULTI_SCHEDULE_EVT,MULTI_SCH_ADV_DURATION_TIME );
-
-        // 2. adv + adv + init
-    }
-    else
-    {
-        // scheduler length : 1
-        // scan
-        // init
-        if( nextScdTime > 0 )
-            osal_start_timerEx(sch_tsk_id,MULTI_SCHEDULE_EVT,nextScdTime );
-        else
-//          osal_set_event(sch_tsk_id,MULTI_SCHEDULE_EVT);
-            osal_start_timerEx(sch_tsk_id,MULTI_SCHEDULE_EVT,MULTI_SCH_ADV_DURATION_TIME );
-    }
+    /// nextScdTime = MULTI_SCH_ADV_DURATION_TIME or adv interval times
+    osal_start_timerEx(sch_tsk_id,MULTI_SCHEDULE_EVT,nextScdTime );
 }
 
 uint8 multiLinkConnParamUpdate( gapLinkUpdateEvent_t* pPkt )
@@ -1276,7 +1294,7 @@ uint8 multiLinkConnParamUpdate( gapLinkUpdateEvent_t* pPkt )
 
     while( node )
     {
-        if( ( node->connectionHandle & 0x000F ) == pPkt->connectionHandle )
+        if( ( node->connectionHandle & 0x00FF ) == pPkt->connectionHandle )
             break;
 
         node = node->next;
@@ -1288,7 +1306,7 @@ uint8 multiLinkConnParamUpdate( gapLinkUpdateEvent_t* pPkt )
 
     if( node->RoleState == Slave_Role )
     {
-        perIdx = (node->connectionHandle & 0xF000 ) >> 12 ;
+        perIdx = (node->connectionHandle & 0xFF00 )>>8;
     }
 
     return perIdx;
@@ -1298,9 +1316,9 @@ uint8 multiLinkConnParamUpdate( gapLinkUpdateEvent_t* pPkt )
  *******************************************************************************************************
     @ Description    :  multiLinkStatusGetSlaveConnHandle
     @ Parameters     :
-                   :  [IN]  indexx
+                   :  [IN]  connhandle
                    :  [OUT] None
-    @ Return         :  16bit value   connhandle
+    @ Return         :  16bit value   idx
     @ Other          :  bit value , the same as multiConfigLink_status()
     Modification History
     DATE        DESCRIPTION
@@ -1308,18 +1326,18 @@ uint8 multiLinkConnParamUpdate( gapLinkUpdateEvent_t* pPkt )
     @author          :  PHY
  *******************************************************************************************************
  *******************************************************************************************************/
-uint16 multiLinkStatusGetSlaveConnHandle( uint8 idx)
+uint16 multiLinkStatusGetSlaveConnPeerIdx( uint8 conn_handle)
 {
     GAPMultiRoleLinkCtrl_t* node = g_multiLinkInfo;
-    uint16 connHandle = 0xFFFF;
+    uint16 idx = 0xFFFF;
 
     while( node )
     {
         if( node->RoleState == Slave_Role )
         {
-            if( idx == ( ( node->connectionHandle & 0xF000 ) >> 12  ) )
+            if( (conn_handle) == ( node->connectionHandle & 0x00FF ) )
             {
-                connHandle = node->connectionHandle & 0x000F;
+                idx = ((node->connectionHandle & 0xFF00)>>8);
                 break;
             }
         }
@@ -1327,7 +1345,7 @@ uint16 multiLinkStatusGetSlaveConnHandle( uint8 idx)
         node = node->next;
     }
 
-    return connHandle;
+    return idx;
 }
 
 /*******************************************************************************************************
@@ -1458,7 +1476,7 @@ static void MultiScheduleScan(multiScehdule_t* node)
     if( node->roleScd.scan.scanning == FALSE )
     {
         ret= GAPMultiRole_StartDiscovery( param[0],param[1],param[2] );
-        LOG("start scan ret %d\n",ret);
+//        LOG("start scan ret %d\n",ret);
 
         if( SUCCESS == ret )
         {
@@ -1475,7 +1493,7 @@ static void MultiScheduleScan(multiScehdule_t* node)
             node->roleScd.scan.scanning = FALSE;
         }
 
-        LOG("stop scan ret %d\n",ret);
+//        LOG("stop scan ret %d\n",ret);
     }
 }
 
@@ -1504,13 +1522,19 @@ static void MultiScheduleInitating(multiScehdule_t* node)
         else
         {
             LOG("start establish failure ret %d\n",ret);
+
+            ///2023 04 25 add: restart multi schedule state machine
+            if(osal_get_timeoutEx(gapMultiRole_TaskID,MULTI_SCHEDULE_EVT) == 0)
+            {
+                osal_start_timerEx(gapMultiRole_TaskID,MULTI_SCHEDULE_EVT,MULTI_SCH_DELAY);
+            }
         }
     }
 }
 
 uint8 multiLinkGetMasterConnNum(void)
 {
-    uint8 len;
+    uint8 len = 0;
     GAPMultiRoleLinkCtrl_t* node = g_multiLinkInfo;
 
     while( node != NULL )
@@ -1569,12 +1593,20 @@ GAPMultiLinkInfo_t multiConfigLink_status(uint8 opcode,void* pkt)
         node->peerDevAddrType = pPkt->devAddrType;
         osal_memcpy(node->peerDevAddr, pPkt->devAddr,B_ADDR_LEN);
         multiScehdule_t* bNode = multiRole_findBusyNode();
+
+        if(bNode == NULL)
+        {
+            /// bugfix:disabled ADV events are up before link est evt
+            bNode = multiRole_findAdvNode();
+            LOG("bNode = %p busy_state = %d  bNode role = %d\n",bNode,bNode->busy,bNode->role);
+        }
+
         ret.value.connHandle = pPkt->connectionHandle;
 
         if( bNode->role == advertiser )
         {
             uint8 idx = bNode->roleScd.adv.perIdx;
-            node->connectionHandle |= (((uint16)idx )<< 12);
+            node->connectionHandle |= (((uint16)idx )<< 8);
             LOG("bNode->roleScd.adv.perIdx %d,node->connectionHandle 0x%x\n",bNode->roleScd.adv.perIdx,node->connectionHandle);
             node->RoleState = Slave_Role;
 //              ret.value.perIdx = ( ((uint16)bNode->roleScd.adv.perIdx) << 8 );
@@ -1586,6 +1618,7 @@ GAPMultiLinkInfo_t multiConfigLink_status(uint8 opcode,void* pkt)
         ret.value.role = node->RoleState;
         multiRole_insert_node( MULTI_LINK_MODE,NULL,NULL, NULL, (void**)&node);
         // 2. delete the busy node
+        // LOG("est conn success and del adv node success :%p  perIdx: %d\n",bNode,bNode->roleScd.adv.perIdx);
         multiRole_delete_node( MULTI_SCH_MODE,NULL,(void**)&bNode  );
     }
     break;
@@ -1598,12 +1631,14 @@ GAPMultiLinkInfo_t multiConfigLink_status(uint8 opcode,void* pkt)
         for(uint8 i=0; i<multiRole_cacLen_list(MULTI_LINK_MODE); i++)
         {
             // priority & > ==
-            if( (tNode->connectionHandle & 0x0EFF) == pPkt->connectionHandle )
+            // AT_LOG("pPkt_conn :%d tNode_conn :%d\n",pPkt->connectionHandle,(tNode->connectionHandle& 0x00FF));
+            if( (tNode->connectionHandle & 0x00FF) == pPkt->connectionHandle )
             {
                 ret.value.connHandle = pPkt->connectionHandle;
                 ret.value.role = tNode->RoleState;
                 // perIdx
-                ret.value.perIdx = (uint16)( (tNode->connectionHandle & 0xF000 ) >> 12 );
+                ret.value.perIdx = (uint16)( (tNode->connectionHandle & 0xFF00 )>>8);
+                // AT_LOG("find conn handle role:%d\n",ret.value.role);
                 break;
             }
 
@@ -1611,12 +1646,14 @@ GAPMultiLinkInfo_t multiConfigLink_status(uint8 opcode,void* pkt)
         }
 
         #if( MAX_CONNECTION_MASTER_NUM > 0 )
+        #ifndef BLE_AT_ENABLE
 
         if( tNode->RoleState == Master_Role )
         {
             multiAddSlaveConnList( tNode->peerDevAddrType,tNode->peerDevAddr );
         }
 
+        #endif
         #endif
         multiRole_delete_node( MULTI_LINK_MODE,NULL,(void**)&tNode  );
     }

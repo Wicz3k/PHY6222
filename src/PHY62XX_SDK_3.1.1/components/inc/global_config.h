@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -166,6 +166,7 @@
 #define   LL_CONN_ADV_EST_TIME             74
 #define   LL_SCANABLE_ADV_EST_TIME         75
 
+#define   LL_SLAVE_FIRST_RXTO_ADVANCE       76
 
 
 #define   MAC_ADDRESS_LOC                  80
@@ -196,9 +197,34 @@
 #define   LL_EXT_ADV_PROCESS_TARGET        99
 #define   LL_PRD_ADV_PROCESS_TARGET        100
 
+#define   EXT_ADV_AUXSCANRSP_DELAY_1MPHY   101
+#define   EXT_ADV_AUXCONNRSP_DELAY_1MPHY   102
 
+#define   EXT_ADV_AUXSCANRSP_DELAY_2MPHY   103
+#define   EXT_ADV_AUXCONNRSP_DELAY_2MPHY   104
 
+#define   EXT_ADV_AUXSCANRSP_DELAY_500KPHY 105
+#define   EXT_ADV_AUXCONNRSP_DELAY_500KPHY 106
 
+#define   EXT_ADV_AUXSCANRSP_DELAY_125KPHY 107
+#define   EXT_ADV_AUXCONNRSP_DELAY_125KPHY 108
+
+#define   EXT_ADV_AUXSCANREQ_DELAY_1MPHY   109
+#define   EXT_ADV_AUXCONNREQ_DELAY_1MPHY   110
+
+#define   EXT_ADV_AUXSCANREQ_DELAY_2MPHY   111
+#define   EXT_ADV_AUXCONNREQ_DELAY_2MPHY   112
+
+#define   EXT_ADV_AUXSCANREQ_DELAY_125KPHY 113
+#define   EXT_ADV_AUXCONNREQ_DELAY_125KPHY 114
+
+#define   LL_EXT_ADV_INTER_SEC_CHN_INT_2MPHY 115
+
+//Open the RX window in advance if the connection interval is too large in sleep mode
+#define   LL_ENLARGE_ADVANCE_RX_WINDOW_VALUE   116  /// 200
+
+#define   GARBAGE_DATA_RESOURCE                117  /// 1000
+#define   MAXSCANRSPONSES                      118  /// 64
 
 
 
@@ -218,6 +244,8 @@
 
 #define   GAP_DUP_RPT_FILTER_DISALLOW      0x00000100       // duplicate report filter in GAP layer, allow default
 #define   ENH_CONN_CMP_EVENT_ALLOW         0x00000200       // allow LL to send enhanced connection complete event.
+#define   RC32_CAP_ADAPTIVE_TRIM           0x00000400
+
 // delete 2018-7-17, should use enum  H_SYSCLK_SEL
 //enum
 //{

@@ -68,12 +68,12 @@
 #include "bleMesh.h"
 #include "vendormodel_server.h"
 #include "EXT_cbtimer.h"
-#include "net_internal.h"
+#include "net_extern.h"
 
 
 #undef USE_HEALTH            // enable Light Lightness server model
 #define USE_HSL                 // enable Light HSL server model
-#define USE_LIGHTNESS            // enable Light Lightness server model
+#undef USE_LIGHTNESS            // enable Light Lightness server model
 #define  USE_CTL                 // disable Light CTL server model
 #undef USE_SCENE               // enable Light Scene server model
 #define USE_VENDORMODEL         // enable Light vendormodel server model
@@ -85,14 +85,14 @@
 extern uint32_t osal_sys_tick;
 
 #define VENDOR_PRODUCT_MAC_ADDR         0x4000
-#define PROCFG_COMPLETE_TIMEOUT         60
+#define PROCFG_COMPLETE_TIMEOUT         20
 
 
 
 void appl_dump_bytes(UCHAR* buffer, UINT16 length);
 void appl_mesh_sample (void);
 
-API_RESULT UI_prov_callback
+static API_RESULT UI_prov_callback
 (
     PROV_HANDLE* phandle,
     UCHAR         event_type,
@@ -110,7 +110,7 @@ void UI_proxy_callback
 
 
 void UI_proxy_start_adv(MS_SUBNET_HANDLE subnet_handle, UCHAR proxy_adv_mode);
-void UI_register_prov(void);
+static void UI_register_prov(void);
 void UI_register_proxy(void);
 void UI_sample_reinit(void);
 void UI_gatt_iface_event_pl_cb
@@ -126,8 +126,8 @@ void timeout_cb (void* args, UINT16 size);
 /* --------------------------------------------- Global Definitions */
 
 
-EM_timer_handle thandle;
-EM_timer_handle proxy_dly_thandle;
+EM_timer_handle thandle = EM_TIMER_HANDLE_INIT_VAL;
+EM_timer_handle proxy_dly_thandle = EM_TIMER_HANDLE_INIT_VAL;
 #if (CFG_HEARTBEAT_MODE)
     EM_timer_handle heartbeat_reply_dly_thandle;
 #endif
@@ -1041,6 +1041,7 @@ API_RESULT UI_phy_model_server_cb
     API_RESULT retval;
     retval = API_SUCCESS;
     opcode = msg_raw->opcode;
+    UCHAR  proxy_state;
 
     switch(opcode)
     {
@@ -1055,7 +1056,16 @@ API_RESULT UI_phy_model_server_cb
         {
             printf("rcv MS_STATE_PHY_MODEL_RESET_T\n");
             MS_common_reset();
-            EM_start_timer (&thandle, 1, timeout_cb, NULL, 0);
+            proxy_state = UI_proxy_state_get();
+
+            if(MS_PROXY_CONNECTED == proxy_state)
+            {
+                blebrr_disconnect_pl();
+            }
+            else
+            {
+                EM_start_timer (&thandle, 3, timeout_cb, NULL, 0);
+            }
         }
         break;
         }
@@ -1443,7 +1453,7 @@ DECL_STATIC PROV_CAPABILITIES_S UI_prov_capab =
 PROV_DEVICE_S UI_lprov_device =
 {
     /** UUID */
-    {0x05, 0x04, 0x62, 0x12, 0x00, 0x01, 0x00, 0x01, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x00, 0x00},
+    {0x04, 0x05, 0x62, 0x22, 0x00, 0x01, 0x00, 0x01, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x00, 0x00},
 
     /** OOB Flag */
     0x00,
@@ -1702,8 +1712,15 @@ static API_RESULT UI_prov_callback
 
             if(*phandle == PROV_BRR_GATT)
             {
+                #if(CFG_MESH_FAST_PRO)
+                blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
+                UI_register_proxy();
+                BRR_HANDLE handle = 1;
+                MS_brr_remove_bearer(BRR_TYPE_GATT, &handle);
+                #else
                 MS_ENABLE_PROXY_FEATURE();
                 osal_start_timerEx(bleMesh_TaskID, BLEMESH_GAP_TERMINATE, 3000); //add gap terminate evt by hq
+                #endif
             }
 
             #ifdef EASY_BOUNDING
@@ -1729,7 +1746,8 @@ static API_RESULT UI_prov_callback
         break;
 
     default:
-        CONSOLE_OUT("Unknown Event - 0x%02X\n", event_type);
+        //CONSOLE_OUT("Unknown Event - 0x%02X\n", event_type);
+        break;
     }
 
     return API_SUCCESS;
@@ -1742,26 +1760,22 @@ static void UI_register_prov(void)
     retval = MS_prov_register(&UI_prov_capab, UI_prov_callback);
     CONSOLE_OUT("Retval - 0x%04X\n", retval);
 }
-//static void UI_prov_filter_add(void)
-//{
-//
-//  NETIF_HANDLE*    handle ;
-//  *handle = 0x01;
-////    UCHAR      pdu[10] = {0xD0,0x04, 0x00,0x08, 0xC0,0x33, 0x22,0x44, 0xA0,0x00};
-//  UCHAR      pdu[6] = {0xD0,0x04, 0xD0,0x04, 0xC0,0x33};
-//   CONSOLE_OUT("Registering with prov_filter_add...\n");
-//
-//      /* Add the incoming Source Address to Filter */
-//
-//  net_proxy_server_filter_op
-//   (
-//           handle,
-//              MS_PROXY_ADD_TO_FILTER_OPCODE,
-//           pdu,
-//           sizeof(pdu),
-//               MS_FALSE
-//      );
-//}
+void UI_prov_filter_add(void)
+{
+    NETIF_HANDLE    handle = 0x1;
+//  UCHAR      pdu[10] = {0xD0,0x04, 0x00,0x08, 0xC0,0x33, 0x22,0x44, 0xA0,0x00};
+    UCHAR      pdu[6] = {0xD0,0x04, 0xD0,0x04, 0xC0,0x33};
+    CONSOLE_OUT("Registering with prov_filter_add...\n");
+    /* Add the incoming Source Address to Filter */
+    net_proxy_server_filter_op
+    (
+        &handle,
+        MS_PROXY_ADD_TO_FILTER_OPCODE,
+        pdu,
+        sizeof(pdu),
+        MS_FALSE
+    );
+}
 #if (CFG_HEARTBEAT_MODE)
 static void UI_register_heartbeat(void)
 {
@@ -1790,6 +1804,7 @@ static void UI_setup_prov(UCHAR role, UCHAR brr)
     if (PROV_BRR_GATT & brr)
     {
         blebrr_gatt_mode_set(BLEBRR_GATT_PROV_MODE);
+        // blebrr_set_gattmode_pl (BLEBRR_GATT_PROV_MODE);
     }
 
     if (PROV_ROLE_PROVISIONER != role)
@@ -1850,6 +1865,7 @@ void UI_proxy_start_adv(MS_SUBNET_HANDLE subnet_handle, UCHAR proxy_adv_mode)
 
     /* Set the role to Proxy with bearer */
     blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
+    // blebrr_set_gattmode_pl (BLEBRR_GATT_PROXY_MODE);
     CONSOLE_OUT("Start Proxy Advertisements with %s for Subnet 0x%04X\n",
                 (proxy_adv_mode == MS_PROXY_NET_ID_ADV_MODE) ? "Network ID" : "Node Identity",
                 subnet_handle);
@@ -2050,6 +2066,7 @@ API_RESULT UI_sample_binding_app_key(void)
             /* Found a Valid App Key */
             /* Keeping the retval as API_SUCCESS */
             retval=MS_access_bind_model_app(UI_generic_onoff_server_model_handle, handle);
+            CONSOLE_OUT("BINDING App Key %04x (%04x %04x)\n",retval,UI_generic_onoff_server_model_handle,handle);
             #ifdef  USE_LIGHTNESS
             retval=MS_access_bind_model_app(UI_light_lightness_server_model_handle, handle);
             CONSOLE_OUT("BINDING App Key %04x (%04x %04x)\n",retval,UI_light_lightness_server_model_handle,handle);
@@ -2107,21 +2124,9 @@ void vm_subscriptiong_binding_cb (void)
         MS_net_stop_snb_timer(0);
     }
 
-    MS_access_cm_set_transmit_state(MS_RELAY_TX_STATE, (0<<3)|1);
+    MS_access_cm_set_transmit_state(MS_RELAY_TX_STATE, (0<<3)|2);
     MS_access_ps_store_disable(MS_FALSE);
-    MS_access_cm_set_transmit_state(MS_NETWORK_TX_STATE, (0<<3)|0);
-//    if(UI_prov_brr_handle == PROV_BRR_ADV)
-//    {
-//        EM_start_timer (&thandle, 3, timeout_cb, NULL, 0);
-//    }
-//    else if(UI_prov_brr_handle == PROV_BRR_GATT)
-//    {
-//        MS_proxy_fetch_state(&proxy_state);
-//        if(proxy_state == MS_PROXY_CONNECTED)
-//        {
-//            blebrr_disconnect_pl();
-//        }
-//    }
+    MS_access_cm_set_transmit_state(MS_NETWORK_TX_STATE, (0<<3)|2);
 }
 
 void vm_subscriptiong_add (MS_NET_ADDR addr)
@@ -2220,17 +2225,12 @@ API_RESULT UI_app_config_server_callback (
     case MS_ACCESS_CONFIG_NODE_RESET_OPCODE:
         CONSOLE_OUT("[ST TimeOut CB]\n");
         proxy_state = UI_proxy_state_get();
+        blebrr_scan_pl(FALSE);
         nvs_reset(NVS_BANK_PERSISTENT);
-
-//        MS_access_cm_reset(PROV_ROLE_DEVICE);
 
         if(MS_PROXY_CONNECTED != proxy_state)
         {
-            EM_start_timer (&thandle, 5, timeout_cb, NULL, 0);
-        }
-        else
-        {
-            blebrr_disconnect_pl();
+            EM_start_timer (&thandle, 3, timeout_cb, NULL, 0);
         }
 
         break;
@@ -2268,7 +2268,7 @@ API_RESULT UI_app_config_server_callback (
         blebrr_scan_pl(FALSE);
         ms_provisioner_addr = saddr;
         vm_subscriptiong_binding_cb();
-//        ms_provisioner_addr = saddr;
+        ms_provisioner_addr = saddr;
         #if (CFG_HEARTBEAT_MODE)
         UI_trn_set_heartbeat_subscription(saddr);
         #endif
@@ -2318,6 +2318,8 @@ void appl_mesh_sample (void)
     #endif
     /* Initialize utilities */
     nvsto_init(NVS_FLASH_BASE1,NVS_FLASH_BASE2);
+    /* Initialize Mesh config */
+    MS_limit_config();
     /* Initialize Mesh Stack */
     MS_init(config_ptr);
     /* Register with underlying BLE stack */
@@ -2404,7 +2406,6 @@ void appl_mesh_sample (void)
 
     /* Configure as provisionee/device */
     UI_register_prov();
-//      UI_prov_filter_add();
     #if (CFG_HEARTBEAT_MODE)
     UI_register_heartbeat();
     #endif
@@ -2426,6 +2427,101 @@ void appl_mesh_sample (void)
     hal_flash_read(address ++,&UI_lprov_device.uuid[9],1);
     EM_start_timer (&thandle, 3, timeout_cb, NULL, 0);
     return;
+}
+
+void appl_mesh_sample_recover (void)
+{
+    MS_ACCESS_NODE_ID node_id;
+    MS_ACCESS_ELEMENT_DESC   element;
+    MS_ACCESS_ELEMENT_HANDLE element_handle;
+    API_RESULT retval;
+    MS_CONFIG* config_ptr;
+    #ifdef MS_HAVE_DYNAMIC_CONFIG
+    MS_CONFIG  config;
+    /* Initialize dynamic configuration */
+    MS_INIT_CONFIG(config);
+    config_ptr = &config;
+    #else
+    config_ptr = NULL;
+    #endif /* MS_HAVE_DYNAMIC_CONFIG */
+    MS_prov_stop_interleave_timer();
+    MS_brr_bcast_end(BRR_BCON_TYPE_PROXY_NETID, BRR_BCON_ACTIVE);
+    MS_brr_bcast_end(BRR_BCON_TYPE_PROXY_NODEID, BRR_BCON_ACTIVE);
+    MS_brr_bcast_end(BRR_BCON_TYPE_UNPROV_DEVICE, BRR_BCON_ACTIVE);
+    MS_brr_bcast_end(BRR_BCON_TYPE_UNPROV_DEVICE, BRR_BCON_PASSIVE);
+    EM_stop_timer(&thandle);
+    nvsto_init(NVS_FLASH_BASE1,NVS_FLASH_BASE2);
+    /* Initialize Mesh Stack */
+    MS_init(config_ptr);
+    /* Register with underlying BLE stack */
+    blebrr_register();
+    /* Register GATT Bearer Connection/Disconnection Event Hook */
+    blebrr_register_gatt_iface_event_pl(UI_gatt_iface_event_pl_cb);
+    /* Create Node */
+    retval = MS_access_create_node(&node_id);
+    /* Register Element */
+    /**
+        TBD: Define GATT Namespace Descriptions from
+        https://www.bluetooth.com/specifications/assigned-numbers/gatt-namespace-descriptors
+
+        Using 'main' (0x0106) as Location temporarily.
+    */
+    element.loc = 0x0106;
+    retval = MS_access_register_element
+             (
+                 node_id,
+                 &element,
+                 &element_handle
+             );
+
+    if (API_SUCCESS == retval)
+    {
+        /* Register foundation model servers */
+        retval = UI_register_foundation_model_servers(element_handle);
+    }
+
+    if (API_SUCCESS == retval)
+    {
+        /* Register Generic OnOff model server */
+        retval = UI_register_generic_onoff_model_server(element_handle);
+    }
+
+    #ifdef  USE_HSL
+
+    if (API_SUCCESS == retval)
+    {
+        /* Register Light Lightness model server */
+        retval = UI_register_light_hsl_model_server(element_handle);
+    }
+
+    #endif
+    #ifdef  USE_CTL
+
+    if (API_SUCCESS == retval)
+    {
+        /* Register Light Lightness model server */
+        retval = UI_register_light_ctl_model_server(element_handle);
+    }
+
+    #endif
+    #ifdef  USE_SCENE
+
+    if (API_SUCCESS == retval)
+    {
+        /* Register Light Scene model server */
+        retval = UI_register_scene_model_server(element_handle);
+    }
+
+    #endif
+    #ifdef  USE_VENDORMODEL
+
+    if (API_SUCCESS == retval)
+    {
+        /* Register Vendor Defined model server */
+        retval = UI_register_vendor_defined_model_server(element_handle);
+    }
+
+    #endif
 }
 
 API_RESULT UI_sample_get_net_key(void )
@@ -2563,7 +2659,7 @@ void UI_sample_reinit(void)
             setup <role:[1 - Device, 2 - Provisioner]> <bearer:[1 - Adv, 2 - GATT]
         */
         role = PROV_ROLE_DEVICE;
-        brr  = PROV_BRR_GATT|PROV_BRR_ADV;  //PROV_BRR_ADV,PROV_BRR_GATT
+        brr  = PROV_BRR_ADV|PROV_BRR_GATT;  //PROV_BRR_ADV,PROV_BRR_GATT
         printf("Bearer type = 0x%02X(Bit0-adv, Bit1-GATT)\r\n", brr);
 //        UI_prov_brr_handle = brr;
         /**
@@ -2578,6 +2674,7 @@ void UI_sample_reinit(void)
     }
     else
     {
+        CONSOLE_OUT("\r\n Setting up as an Provisioned Device\r\n");
         /* Fetch PROXY feature state */
         MS_access_cm_get_features_field(&state, MS_FEATURE_PROXY);
 

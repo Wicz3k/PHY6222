@@ -213,7 +213,7 @@ extern gapAdvertState_t* pGapAdvertState;
 extern gapPeripheralCBs_t* pfnPeripheralCBs;
 
 // Common variables
-extern gapAuthStateParams_t* pAuthLink[];
+extern gapAuthStateParams_t** pAuthLink;
 extern uint16 gapPrivateAddrChangeTimeout;
 extern uint8 gapAutoAdvPrivateAddrChange;
 
@@ -267,6 +267,12 @@ extern uint8 gapReadBufSizeCmdStatus( hciRetParam_LeReadBufSize_t* pCmdStat );
                 event for the call to HCI_BLECreateLLConnCmd().
 */
 extern void gapProcessConnectionCompleteEvt( hciEvt_BLEConnComplete_t* pPkt );
+
+/*
+    gapProcessEnhConnectionCompleteEvt - Process the HCI enhenced Connection Complete
+                event
+*/
+extern  void gapProcessEnhConnectionCompleteEvt( hciEvt_BLEEnhConnComplete_t* pPkt );
 
 /*
     gapProcessConnUpdateCompleteEvt - Process the HCI Connection Parameters
@@ -490,6 +496,7 @@ extern void gapSendLinkUpdateEvent( uint8 status, uint16 connectionHandle,
 */
 extern void gapProcessL2CAPSignalEvt( l2capSignalEvent_t* pCmd );
 
+extern uint8 gap_AuthenLink_InitContent(uint8 max_conn_num,gapAuthStateParams_t** Authen_link);
 
 /*********************************************************************
 *********************************************************************/

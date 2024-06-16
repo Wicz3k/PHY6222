@@ -42,6 +42,10 @@
 #include "rf_phy_driver.h"
 #include "flash.h"
 #include "version.h"
+#include "fs.h"
+
+// patch max gatt num conn
+#include "host_cfg.h"
 
 #define DEFAULT_UART_BAUD   115200
 
@@ -61,8 +65,8 @@ extern void hal_rom_boot_init(void);
     CONNECTION CONTEXT RELATE DEFINITION
 */
 #define   BLE_MAX_ALLOW_CONNECTION              1
-#define   BLE_MAX_ALLOW_PKT_PER_EVENT_TX        8
-#define   BLE_MAX_ALLOW_PKT_PER_EVENT_RX        8
+#define   BLE_MAX_ALLOW_PKT_PER_EVENT_TX        2
+#define   BLE_MAX_ALLOW_PKT_PER_EVENT_RX        2
 
 #define   BLE_PKT_VERSION                       BLE_PKT_VERSION_5_1 //BLE_PKT_VERSION_5_1 //BLE_PKT_VERSION_5_1     
 
@@ -88,9 +92,11 @@ extern void hal_rom_boot_init(void);
                                              + ((BLE_PKT_VERSION == BLE_PKT_VERSION_4_0) ? 1 : 0) * BLE_PKT40_LEN \
                                              + (sizeof(struct ll_pkt_desc) - 2))
 
-#define   BLE_MAX_ALLOW_PER_CONNECTION          ( (BLE_MAX_ALLOW_PKT_PER_EVENT_TX * BLE_PKT_BUF_SIZE*2) \
-                                                  +(BLE_MAX_ALLOW_PKT_PER_EVENT_RX * BLE_PKT_BUF_SIZE)   \
-                                                  + BLE_PKT_BUF_SIZE )
+//#define   BLE_MAX_ALLOW_PER_CONNECTION          ( (BLE_MAX_ALLOW_PKT_PER_EVENT_TX * BLE_PKT_BUF_SIZE*2) \
+//                                                  +(BLE_MAX_ALLOW_PKT_PER_EVENT_RX * BLE_PKT_BUF_SIZE)   \
+//                                                  + BLE_PKT_BUF_SIZE )
+#define   BLE_MAX_ALLOW_PER_CONNECTION          ( BLE_PKT_BUF_SIZE )
+
 
 #define   BLE_CONN_BUF_SIZE                 (BLE_MAX_ALLOW_CONNECTION * BLE_MAX_ALLOW_PER_CONNECTION)
 
@@ -114,6 +120,13 @@ llConnState_t               pConnContext[BLE_MAX_ALLOW_CONNECTION];
 #define     LARGE_HEAP_SIZE  (4*1024)
 ALIGN4_U8       g_largeHeap[LARGE_HEAP_SIZE];
 
+#define     LL_LINKBUF_CFG_NUM                0
+
+#define     LL_PKT_BUFSIZE                    280
+#define     LL_LINK_HEAP_SIZE    ( ( BLE_MAX_ALLOW_CONNECTION * 3 + LL_LINKBUF_CFG_NUM ) * LL_PKT_BUFSIZE )//basic Space + configurable Space
+ALIGN4_U8   g_llLinkHeap[LL_LINK_HEAP_SIZE];
+
+// Table of callbacks to make when a connection changes state
 /*********************************************************************
     GLOBAL VARIABLES
 */
@@ -175,6 +188,9 @@ static void hal_low_power_io_init(void)
 
 static void ble_mem_init_config(void)
 {
+    //ll linkmem setup
+    extern void ll_osalmem_init(osalMemHdr_t* hdr, uint32 size);
+    ll_osalmem_init((osalMemHdr_t*)g_llLinkHeap, LL_LINK_HEAP_SIZE);
     osal_mem_set_heap((osalMemHdr_t*)g_largeHeap, LARGE_HEAP_SIZE);
     LL_InitConnectContext(pConnContext,
                           g_pConnectionBuffer,
@@ -182,6 +198,14 @@ static void ble_mem_init_config(void)
                           BLE_MAX_ALLOW_PKT_PER_EVENT_TX,
                           BLE_MAX_ALLOW_PKT_PER_EVENT_RX,
                           BLE_PKT_VERSION);
+    Host_InitContext(   MAX_NUM_LL_CONN,
+                        glinkDB,glinkCBs,
+                        smPairingParam,
+                        gMTU_Size,
+                        gAuthenLink,
+                        l2capReassembleBuf,l2capSegmentBuf,
+                        gattClientInfo,
+                        gattServerInfo);
     #ifdef  BLE_SUPPORT_CTE_IQ_SAMPLE
     LL_EXT_Init_IQ_pBuff(g_llCteSampleI,g_llCteSampleQ);
     #endif
@@ -197,7 +221,8 @@ static void hal_rfphy_init(void)
     g_rfPhyFreqOffSet   =RF_PHY_FREQ_FOFF_00KHZ;
     //============config xtal 16M cap
     XTAL16M_CAP_SETTING(0x09);
-    XTAL16M_CURRENT_SETTING(0x01);
+    XTAL16M_CURRENT_SETTING(0x03);
+    hal_rc32k_clk_tracking_init();
     hal_rom_boot_init();
     NVIC_SetPriority((IRQn_Type)BB_IRQn,    IRQ_PRIO_REALTIME);
     NVIC_SetPriority((IRQn_Type)TIM1_IRQn,  IRQ_PRIO_HIGH);     //ll_EVT
@@ -216,21 +241,21 @@ static void hal_init(void)
     hal_pwrmgr_init();
     xflash_Ctx_t cfg =
     {
-        .spif_ref_clk   =   SYS_CLK_DLL_64M,
         .rd_instr       =   XFRD_FCMD_READ_DUAL
     };
     hal_spif_cache_init(cfg);
     hal_gpio_init();
+    hal_fs_init(0x1103C000,3);
 }
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 int  main(void)
 {
-    g_system_clk = SYS_CLK_DBL_32M;//SYS_CLK_XTAL_16M;//SYS_CLK_DLL_48M;
+    g_system_clk = SYS_CLK_DLL_48M;//SYS_CLK_XTAL_16M;//SYS_CLK_DLL_48M;
     g_clk32K_config = CLK_32K_RCOSC;//CLK_32K_XTAL;//CLK_32K_XTAL,CLK_32K_RCOSC
     #if(FLASH_PROTECT_FEATURE == 1)
-    hal_flash_lock();
+    hal_flash_enable_lock(MAIN_INIT);
     #endif
     drv_irq_init();
     init_config();
@@ -244,10 +269,12 @@ int  main(void)
     #endif
     LOG_INIT();
     LOG("SDK Version ID %08x \n",SDK_VER_RELEASE_ID);
+    LOG("MAX_NUM_LL_CONN %d , GATT_MAX_NUM_CONN %d\n",MAX_NUM_LL_CONN,GATT_MAX_NUM_CONN);
     LOG("rfClk %d rcClk %d sysClk %d tpCap[%02x %02x]\n",g_rfPhyClkSel,g_clk32K_config,g_system_clk,g_rfPhyTpCal0,g_rfPhyTpCal1);
     LOG("sizeof(struct ll_pkt_desc) = %d, buf size = %d\n", sizeof(struct ll_pkt_desc), BLE_CONN_BUF_SIZE);
     LOG("sizeof(g_pConnectionBuffer) = %d, sizeof(pConnContext) = %d, sizeof(largeHeap)=%d \n",\
         sizeof(g_pConnectionBuffer), sizeof(pConnContext),sizeof(g_largeHeap));
+    LOG("[REST CAUSE] %d\n ",g_system_reset_cause);
     app_main();
 }
 

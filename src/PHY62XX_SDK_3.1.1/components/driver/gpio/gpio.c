@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -49,6 +49,7 @@
 #include "error.h"
 #include "jump_function.h"
 #include "log.h"
+#include "global_config.h"
 
 
 extern uint32_t s_gpio_wakeup_src_group1,s_gpio_wakeup_src_group2;
@@ -74,6 +75,7 @@ typedef struct
 {
     bool          state;
     uint8_t       pin_assignments[NUMBER_OF_PINS];
+    uint32_t      pin_retention_status;
     gpioin_Ctx_t  irq_ctx[NUMBER_OF_PINS];
 
 } gpio_Ctx_t;
@@ -90,6 +92,7 @@ static gpio_Ctx_t m_gpioCtx =
 {
     .state = FALSE,
     .pin_assignments = {0,},
+    .pin_retention_status = 0
 };
 
 const uint8_t c_gpio_index[GPIO_NUM] = {0,1,2,3,7,9,10,11,14,15,16,17,18,20,23,24,25,26,27,31,32,33,34};
@@ -158,6 +161,9 @@ static int hal_gpio_interrupt_disable(gpio_pin_e pin)
 void hal_gpio_write(gpio_pin_e pin, uint8_t en)
 {
 //    hal_gpio_pin_init(pin,GPIO_OUTPUT);
+    if (pin > (NUMBER_OF_PINS - 1))
+        return;
+
     if(en)
         AP_GPIO->swporta_dr |= BIT(pin);
     else
@@ -168,6 +174,9 @@ void hal_gpio_write(gpio_pin_e pin, uint8_t en)
 
 void hal_gpio_fast_write(gpio_pin_e pin, uint8_t en)
 {
+    if (pin > (NUMBER_OF_PINS - 1))
+        return;
+
     if(en)
         AP_GPIO->swporta_dr |= BIT(pin);
     else
@@ -177,6 +186,9 @@ void hal_gpio_fast_write(gpio_pin_e pin, uint8_t en)
 bool hal_gpio_read(gpio_pin_e pin)
 {
     uint32_t r;
+
+    if (pin > (NUMBER_OF_PINS - 1))
+        return PPlus_ERR_NOT_SUPPORTED;
 
     if(AP_GPIO->swporta_ddr & BIT(pin))
         r = AP_GPIO->swporta_dr;
@@ -188,6 +200,9 @@ bool hal_gpio_read(gpio_pin_e pin)
 
 void hal_gpio_fmux(gpio_pin_e pin, bit_action_e value)
 {
+    if (pin > (NUMBER_OF_PINS - 1))
+        return;
+
     if(value)
     {
 //        if((pin == P2) || (pin == P3))
@@ -206,10 +221,11 @@ void hal_gpio_fmux_set(gpio_pin_e pin,gpio_fmux_e type)
 
     if(pin != GPIO_DUMMY)
     {
-        reg_index = pin / 4;
-        bit_index = pin % 4;
+        reg_index = pin >> 2;
+        bit_index = pin & 0x03;
         l = 8 * bit_index;
         h = l + 5;
+        hal_gpioin_disable(pin);
         subWriteReg(&(AP_IOMUX->gpio_sel[reg_index]),h,l,type);
         hal_gpio_fmux(pin, Bit_ENABLE);
     }
@@ -217,10 +233,12 @@ void hal_gpio_fmux_set(gpio_pin_e pin,gpio_fmux_e type)
 
 int hal_gpio_pin_init(gpio_pin_e pin,gpio_dir_t type)
 {
-    if((type == GPIO_INPUT)&&(m_gpioCtx.pin_assignments[pin] == GPIO_PIN_ASSI_OUT))
-    {
-        return PPlus_ERR_INVALID_STATE;
-    }
+    if (pin > (NUMBER_OF_PINS - 1))
+        return PPlus_ERR_NOT_SUPPORTED;
+
+    if((m_gpioCtx.pin_assignments[pin] == GPIO_PIN_ASSI_OUT) &&
+            (m_gpioCtx.pin_retention_status & BIT(pin)) && (type == GPIO_INPUT))
+        return PPlus_ERR_INVALID_PARAM;
 
     hal_gpio_fmux(pin,Bit_DISABLE);
 
@@ -232,7 +250,7 @@ int hal_gpio_pin_init(gpio_pin_e pin,gpio_dir_t type)
     if(type == GPIO_OUTPUT)
     {
         AP_GPIO->swporta_ddr |= BIT(pin);
-        //m_gpioCtx.pin_assignments[pin] = GPIO_PIN_ASSI_OUT;
+        m_gpioCtx.pin_assignments[pin] = GPIO_PIN_ASSI_OUT;
     }
     else
     {
@@ -263,6 +281,9 @@ static void hal_gpio_wakeup_control(gpio_pin_e pin, bit_action_e value)
 
 void hal_gpio_ds_control(gpio_pin_e pin, bit_action_e value)
 {
+    if (pin > (NUMBER_OF_PINS - 1))
+        return;
+
     if(value)
         AP_IOMUX->pad_ps0 |= BIT(pin);
     else
@@ -271,11 +292,13 @@ void hal_gpio_ds_control(gpio_pin_e pin, bit_action_e value)
 
 int hal_gpioretention_unregister(gpio_pin_e pin)
 {
-    if(m_gpioCtx.pin_assignments[pin] == GPIO_PIN_ASSI_IN)
+    if (pin > (NUMBER_OF_PINS - 1))
+        return PPlus_ERR_NOT_SUPPORTED;
+
+    if(m_gpioCtx.pin_assignments[pin] != GPIO_PIN_ASSI_OUT)
         return PPlus_ERR_INVALID_PARAM;
 
-    m_gpioCtx.pin_assignments[pin] = GPIO_PIN_ASSI_NONE;
-    hal_gpio_pin_init(pin,GPIO_INPUT);
+    m_gpioCtx.pin_retention_status &= ~BIT(pin);
     return PPlus_SUCCESS;
 }
 
@@ -298,6 +321,9 @@ int hal_gpio_cfg_analog_io(gpio_pin_e pin, bit_action_e value)
     if((pin < P11) || (pin > P25))
         return PPlus_ERR_INVALID_PARAM;
 
+    if (pin > (NUMBER_OF_PINS - 1))
+        return PPlus_ERR_NOT_SUPPORTED;
+
     if(value)
     {
         hal_gpio_pull_set(pin,GPIO_FLOATING);
@@ -314,6 +340,9 @@ int hal_gpio_cfg_analog_io(gpio_pin_e pin, bit_action_e value)
 
 void hal_gpio_pull_set(gpio_pin_e pin, gpio_pupd_e type)
 {
+    if (pin > (NUMBER_OF_PINS - 1))
+        return;
+
     uint8_t i = c_gpio_pull[pin].reg_i;
     uint8_t h = c_gpio_pull[pin].bit_h;
     uint8_t l = c_gpio_pull[pin].bit_l;
@@ -326,6 +355,9 @@ void hal_gpio_pull_set(gpio_pin_e pin, gpio_pupd_e type)
 
 void hal_gpio_wakeup_set(gpio_pin_e pin, gpio_polarity_e type)
 {
+    if (pin > (NUMBER_OF_PINS - 1))
+        return;
+
     uint8_t i = c_gpio_pull[pin].reg_i;
     uint8_t p = c_gpio_pull[pin].bit_l-1;
 
@@ -360,9 +392,12 @@ void hal_gpio_pin2pin3_control(gpio_pin_e pin, uint8_t en)//0:sw,1:other func
         AP_IOMUX->gpio_pad_en &= ~BIT(pin-2);
 }
 
-
+#if(CFG_SLEEP_MODE == PWR_MODE_SLEEP)
 static void hal_gpio_retention_enable(gpio_pin_e pin,uint8_t en)
 {
+    if (pin > (NUMBER_OF_PINS - 1))
+        return;
+
     if(en)
     {
         if((pin == P32)||(pin == P33)||(pin == P34))
@@ -386,6 +421,7 @@ static void hal_gpio_retention_enable(gpio_pin_e pin,uint8_t en)
         }
     }
 }
+#endif
 
 int hal_gpioin_disable(gpio_pin_e pin)
 {
@@ -404,7 +440,7 @@ static int hal_gpio_interrupt_enable(gpio_pin_e pin, gpio_polarity_e type)
 {
     uint32_t gpio_tmp;
 
-    if (pin >= NUMBER_OF_PINS)
+    if (pin > (NUMBER_OF_PINS - 1))
         return PPlus_ERR_NOT_SUPPORTED;
 
     gpio_tmp = AP_GPIO->inttype_level;
@@ -431,6 +467,9 @@ static void hal_gpioin_event_pin(gpio_pin_e pin, gpio_polarity_e type)
 {
     gpioin_Ctx_t* p_irq_ctx = &(m_gpioCtx.irq_ctx[0]);
 
+    if (pin > (NUMBER_OF_PINS - 1))
+        return;
+
     if (p_irq_ctx[pin].posedgeHdl && (type == POL_RISING ))
     {
         p_irq_ctx[pin].posedgeHdl(pin,POL_RISING );//LOG("POS\n");
@@ -441,14 +480,19 @@ static void hal_gpioin_event_pin(gpio_pin_e pin, gpio_polarity_e type)
     }
 }
 
+#if(CFG_SLEEP_MODE == PWR_MODE_SLEEP)
 static void hal_gpioin_wakeup_trigger(gpio_pin_e pin)
 {
+    if (pin > (NUMBER_OF_PINS - 1))
+        return;
+
     uint8_t pin_state = (uint8_t)hal_gpio_read(pin);
     gpio_polarity_e type = pin_state ? POL_RISING  : POL_FALLING;
 
     if (m_gpioCtx.irq_ctx[pin].pin_state != pin_state)
         hal_gpioin_event_pin(pin, type);
 }
+#endif
 
 static void hal_gpioin_event(uint32 int_status, uint32 polarity)
 {
@@ -480,7 +524,7 @@ static void hal_gpioin_event(uint32 int_status, uint32 polarity)
         }
     }
 }
-
+#if(CFG_SLEEP_MODE == PWR_MODE_SLEEP)
 static void hal_gpio_sleep_handler(void)
 {
     int i;
@@ -489,14 +533,29 @@ static void hal_gpio_sleep_handler(void)
     for (i = 0; i < NUMBER_OF_PINS; i++)
     {
         //config wakeup
-        if (m_gpioCtx.pin_assignments[i] == GPIO_PIN_ASSI_OUT)
+        if ((m_gpioCtx.pin_assignments[i] == GPIO_PIN_ASSI_OUT) && (m_gpioCtx.pin_retention_status & BIT(i)))
         {
             hal_gpio_retention_enable((gpio_pin_e)i,Bit_ENABLE);
         }
 
         if (m_gpioCtx.pin_assignments[i] == GPIO_PIN_ASSI_IN)
         {
-            pol = hal_gpio_read((gpio_pin_e)i) ? POL_FALLING : POL_RISING ;
+            #ifdef XOSC_PIN_ALLOW
+
+            if((i==P16)||(i==P17))
+            {
+                hal_gpio_cfg_analog_io((gpio_pin_e)i,Bit_DISABLE);
+                subWriteReg(&(AP_AON->PMCTL2_0),6,6,0x01);
+                WaitUs(50);
+                pol = hal_gpio_read((gpio_pin_e)i) ? POL_FALLING : POL_RISING ;
+                subWriteReg(&(AP_AON->PMCTL2_0),6,6,0x00);
+            }
+            else
+            #endif
+            {
+                pol = hal_gpio_read((gpio_pin_e)i) ? POL_FALLING : POL_RISING ;
+            }
+
             hal_gpio_wakeup_set((gpio_pin_e)i, pol);
             m_gpioCtx.irq_ctx[i].pin_state = hal_gpio_read((gpio_pin_e)i);
         }
@@ -508,13 +567,37 @@ static void hal_gpio_wakeup_handler(void)
     int i;
     NVIC_SetPriority(GPIO_IRQn, IRQ_PRIO_HAL);
     NVIC_EnableIRQ(GPIO_IRQn);
+    #ifdef XOSC_PIN_ALLOW
+
+    if (pGlobal_config[LL_SWITCH] & LL_RC32K_SEL)
+    {
+        subWriteReg(0x4000f01c,16,7,0x3fb);   //software control 32k_clk
+        subWriteReg(0x4000f01c,6,6,0x01);     //enable software control
+    }
+    else
+    {
+        subWriteReg(0x4000f01c,9,8,0x03);   //software control 32k_clk
+        subWriteReg(0x4000f01c,6,6,0x00);   //disable software control
+    }
+
+    #endif
 
     for (i = 0; i < NUMBER_OF_PINS; i++)
     {
-        if((i == 2) || (i == 3))
-            hal_gpio_pin2pin3_control((gpio_pin_e)i,1);
+        if(m_gpioCtx.pin_assignments[i] != GPIO_PIN_ASSI_NONE)
+        {
+            if((i == P2) || (i == P3))
+                hal_gpio_pin2pin3_control((gpio_pin_e)i,1);
 
-        if (m_gpioCtx.pin_assignments[i] == GPIO_PIN_ASSI_OUT)
+            #ifdef XOSC_PIN_ALLOW
+
+            if((i == P16) ||(i == P17))
+                hal_gpio_cfg_analog_io((gpio_pin_e)i, Bit_DISABLE);
+
+            #endif
+        }
+
+        if ((m_gpioCtx.pin_assignments[i] == GPIO_PIN_ASSI_OUT) && (m_gpioCtx.pin_retention_status & BIT(i)))
         {
             bool pol = hal_gpio_read((gpio_pin_e)i);
             hal_gpio_write((gpio_pin_e)i,pol);
@@ -528,6 +611,8 @@ static void hal_gpio_wakeup_handler(void)
         }
     }
 }
+#endif
+
 
 void __attribute__((used)) hal_GPIO_IRQHandler(void)
 {
@@ -542,6 +627,9 @@ int hal_gpioin_enable(gpio_pin_e pin)
     gpioin_Ctx_t* p_irq_ctx = &(m_gpioCtx.irq_ctx[0]);
     gpio_polarity_e type = POL_FALLING;
     uint32 pinVal = 0;
+
+    if (pin > (NUMBER_OF_PINS - 1))
+        return PPlus_ERR_NOT_SUPPORTED;
 
     if (p_irq_ctx[pin].posedgeHdl == NULL && p_irq_ctx[pin].negedgeHdl == NULL)
         return PPlus_ERR_NOT_REGISTED;
@@ -571,11 +659,13 @@ int hal_gpioin_enable(gpio_pin_e pin)
 
 int hal_gpioretention_register(gpio_pin_e pin)
 {
-    if(m_gpioCtx.pin_assignments[pin] == GPIO_PIN_ASSI_IN)
+    if (pin > (NUMBER_OF_PINS - 1))
+        return PPlus_ERR_NOT_SUPPORTED;
+
+    if(m_gpioCtx.pin_assignments[pin] != GPIO_PIN_ASSI_OUT)
         return PPlus_ERR_INVALID_PARAM;
 
-    m_gpioCtx.pin_assignments[pin] = GPIO_PIN_ASSI_OUT;
-    hal_gpio_pin_init(pin,GPIO_OUTPUT);
+    m_gpioCtx.pin_retention_status |= BIT(pin);
     return PPlus_SUCCESS;
 }
 
@@ -611,7 +701,9 @@ int hal_gpio_init(void)
     AP_WAKEUP->io_wu_mask_34_32 = 0;
     NVIC_SetPriority(GPIO_IRQn, IRQ_PRIO_HAL);
     NVIC_EnableIRQ(GPIO_IRQn);
+    #if(CFG_SLEEP_MODE == PWR_MODE_SLEEP)
     hal_pwrmgr_register(MOD_GPIO, hal_gpio_sleep_handler, hal_gpio_wakeup_handler);
+    #endif
     return PPlus_SUCCESS;
 }
 
@@ -621,9 +713,4 @@ void hal_gpio_debug_mux(Freq_Type_e fre,bool en)
         AP_IOMUX->debug_mux_en |= BIT(fre);
     else
         AP_IOMUX->debug_mux_en &= ~BIT(fre);
-}
-
-void hal_gpioin_set_flag(gpio_pin_e pin)
-{
-    m_gpioCtx.pin_assignments[pin] = GPIO_PIN_ASSI_IN;
 }

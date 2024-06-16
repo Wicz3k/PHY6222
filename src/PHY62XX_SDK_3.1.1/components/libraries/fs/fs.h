@@ -45,6 +45,27 @@
 
 #include "types.h"
 
+#define FS_SECTOR_NUM_MAX                         (15)    //macro need user re-define if sector num > 16
+
+#define FS_CACHE_NUM_MAX                          (64)
+
+
+#define FS_ID_NULL                                (0xFFFF)  //NULL FS ID for FS CACHE ID 
+
+/*
+    fs cache addr need 32bit when FS_SECTOR_NUM_MAX>15
+*/
+#if(FS_SECTOR_NUM_MAX>15)
+    #define FS_ADDR_NULL                              (0xFFFFFFFF)  //NULL FS ID for FS CACHE addr
+#else
+    #define FS_ADDR_NULL                              (0xFFFF)  //NULL FS ID for FS CACHE addr
+#endif
+
+#if(FS_SECTOR_NUM_MAX>15)
+    typedef uint32_t fsCachAddr_t;
+#else
+    typedef uint16_t fsCachAddr_t;
+#endif
 /**************************************************************************************
     @fn          hal_fs_init
 
@@ -55,7 +76,7 @@
 
     input parameters
 
-    @param       fs_start_address:
+    @param       fs_addr:
                 fs zone start address,4Kbyte align.
                 fs zone should not cover phy code and app code.
 
@@ -75,7 +96,7 @@
                             PPlus_ERR_FS_WRITE_FAILED       flash cannot write.
                             PPlus_ERR_FS_RESERVED_ERROR reserved error.
  **************************************************************************************/
-int hal_fs_init(uint32_t fs_start_address,uint8_t sector_num);
+int hal_fs_init(uint32_t fs_addr, uint8_t sect_num);
 
 /**************************************************************************************
     @fn          hal_fs_item_read
@@ -133,6 +154,57 @@ int hal_fs_item_read(uint16_t id,uint8_t* buf,uint16_t buf_len,uint16_t* len);
  **************************************************************************************/
 int hal_fs_item_write(uint16_t id,uint8_t* buf,uint16_t len);
 
+
+/**************************************************************************************
+    @fn          hal_fs_list
+
+    @brief       get file number, file id and size.
+
+    input parameters
+
+    @param       None.
+
+    output parameters
+
+    @param       None.
+
+    @return
+    @return
+                            PPlus_SUCCESS                                   file write success
+                            PPlus_ERR_FS_IN_INT                     write later beyond int processing
+                            PPlus_ERR_FS_UNINITIALIZED      fs has not been inited
+                            PPlus_ERR_FS_PARAMETER              parameter error,check it
+                            PPlus_ERR_FS_NOT_ENOUGH_SIZE    there is not enouth size to write this file
+                            PPlus_ERR_FATAL                             there is a same id file,when delete it,occur a error
+ **************************************************************************************/
+int hal_fs_list(uint32_t* fnum, uint16_t* pfid, uint16_t* pfsize);
+
+/**************************************************************************************
+    @fn          hal_fs_get_size
+
+    @brief       get total size, free size, max filesize, unit size, sector number.
+
+    input parameters
+
+    @param       None.
+
+    output parameters
+
+    @param       None.
+
+    @return
+    @return
+                          PPlus_SUCCESS                                   file write success
+                          PPlus_ERR_FS_IN_INT                     write later beyond int processing
+                          PPlus_ERR_FS_UNINITIALIZED      fs has not been inited
+                          PPlus_ERR_FS_PARAMETER              parameter error,check it
+                          PPlus_ERR_FS_NOT_ENOUGH_SIZE    there is not enouth size to write this file
+                          PPlus_ERR_FATAL                             there is a same id file,when delete it,occur a error
+ **************************************************************************************/
+int hal_fs_get_size(uint32_t* fs_size, uint32_t* free_size,
+                    uint32_t* fsize_max, uint8_t* item_size, uint8_t* sector_num);
+
+
 /**************************************************************************************
     @fn          hal_fs_get_free_size
 
@@ -146,12 +218,18 @@ int hal_fs_item_write(uint16_t id,uint8_t* buf,uint16_t len);
 
     output parameters
 
-    @param       None.
+    @param       free_size.
 
     @return
-                            free size
+    @return
+                            PPlus_SUCCESS                                   file write success
+                            PPlus_ERR_FS_IN_INT                     write later beyond int processing
+                            PPlus_ERR_FS_UNINITIALIZED      fs has not been inited
+                            PPlus_ERR_FS_PARAMETER              parameter error,check it
+                            PPlus_ERR_FS_NOT_ENOUGH_SIZE    there is not enouth size to write this file
+                            PPlus_ERR_FATAL                             there is a same id file,when delete it,occur a error
  **************************************************************************************/
-uint32_t hal_fs_get_free_size(void);
+int hal_fs_get_free_size(uint32_t* free_size);
 
 /**************************************************************************************
     @fn          hal_fs_get_garbage_size
@@ -268,5 +346,16 @@ int hal_fs_format(uint32_t fs_start_address,uint8_t sector_num);
                 FALSE
  **************************************************************************************/
 bool hal_fs_initialized(void);
+
+
+// set fs psr protection
+void fs_set_psr_protection(bool enable);
+int hal_fs_item_find_id(uint16_t id, uint32_t* id_addr);
+int hal_fs_item_id_fading(uint16_t id, uint16_t new_id);
+int hal_fs_item_assert(uint16_t id);
+
+
+
+
 
 #endif

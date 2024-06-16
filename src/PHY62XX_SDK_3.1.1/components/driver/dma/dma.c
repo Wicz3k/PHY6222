@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -40,9 +40,7 @@
 #include "jump_function.h"
 
 #include "dma.h"
-#include "spi.h"
-#include "uart.h"
-#include "i2c.h"
+#include "flash.h"
 
 typedef struct
 {
@@ -165,6 +163,12 @@ int hal_dma_config_channel(DMA_CH_t ch, DMA_CH_CFG_t* cfg)
         // This channel is enabled, return ERROR, need to release this channel first
         return PPlus_ERR_BUSY;
     }
+
+    if((ch == DMA_CH_0)&&(spif_dma_use == true))
+        return PPlus_ERR_FORBIDDEN;
+
+    if(ch == DMA_CH_0)
+        spif_dma_use = true;
 
     // Reset the Interrupt status
     AP_DMA_INT->ClearTfr = DMA_DMACIntTfrClr_Ch(ch);
@@ -297,6 +301,7 @@ int hal_dma_stop_channel(DMA_CH_t ch)
 //    AP_DMA_INT->MaskTfr = DMA_DMACCxIntMask_E(ch);
     AP_DMA_MISC->ChEnReg = DMA_DMACCxConfig_E(ch);
     pctx->xmit_busy = FALSE;
+    spif_dma_use = false;
     hal_pwrmgr_unlock(MOD_DMA);
     return PPlus_SUCCESS;
 }
@@ -332,7 +337,7 @@ int hal_dma_wait_channel_complete(DMA_CH_t ch)
     {
         Temp ++;
 
-        if(AP_DMA_INT->RawTfr)
+        if(AP_DMA_INT->RawTfr & BIT(ch))
         {
             break;
         }

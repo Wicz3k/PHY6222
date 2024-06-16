@@ -107,8 +107,6 @@ extern "C"
 
 /** @} End GATT_MAX_ATTR_SIZE_DEFINES */
 
-// GATT Maximum number of connections (including loopback)
-#define GATT_MAX_NUM_CONN                ( MAX_NUM_LL_CONN + 1 )
 
 // GATT Base Method
 #define GATT_BASE_METHOD                 0x40

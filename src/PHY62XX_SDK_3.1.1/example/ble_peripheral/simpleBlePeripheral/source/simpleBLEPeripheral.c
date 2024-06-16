@@ -1,4 +1,4 @@
-/**************************************************************************************************
+﻿/**************************************************************************************************
 
     Phyplus Microelectronics Limited confidential and proprietary.
     All rights reserved.
@@ -53,7 +53,10 @@
 #include "gattservapp.h"
 //#include "devinfoservice.h"
 #include "sbpProfile_ota.h"
-#include "ota_app_service.h"
+
+#ifdef PHY_OTA_ENABLE
+    #include "ota_app_service.h"
+#endif
 #include "peripheral.h"
 #include "gapbondmgr.h"
 #include "pwrmgr.h"
@@ -63,7 +66,8 @@
 #include "ll_hw_drv.h"
 #include "ll_def.h"
 #include "hci_tl.h"
-//#include "led_light.h"
+#include "l2cap_internal.h"
+
 /*********************************************************************
     MACROS
 */
@@ -74,6 +78,7 @@
 
 // How often to perform periodic event
 #define SBP_PERIODIC_EVT_PERIOD                   5000
+#define SBP_PPSP_PERIODIC_EVT_PERIOD          500
 
 #define DEVINFO_SYSTEM_ID_LEN             8
 #define DEVINFO_SYSTEM_ID                 0
@@ -94,7 +99,7 @@
 #define DEFAULT_DESIRED_CONN_TIMEOUT          500//1000
 
 // Whether to enable automatic parameter update request when a connection is formed
-#define DEFAULT_ENABLE_UPDATE_REQUEST         TRUE
+#define DEFAULT_ENABLE_UPDATE_REQUEST         TRUE//FALSE
 
 // Connection Pause Peripheral time value (in seconds)
 #define DEFAULT_CONN_PAUSE_PERIPHERAL         6
@@ -119,6 +124,8 @@
 #define DBG_RTC_TEST                           0
 
 #define LATENCY_TEST                           0
+
+#define DYNAMIC_CLK_CHG_TEST                   0
 
 /*********************************************************************
     TYPEDEFS
@@ -268,6 +275,12 @@ static uint8 otaConnIntvMin     = DEFAULT_DESIRED_MAX_CONN_INTERVAL>>2;        /
 static uint8 otaConnIntvLatency = DEFAULT_DESIRED_SLAVE_LATENCY;        //
 static uint8 otaConnTimeOut     = DEFAULT_DESIRED_CONN_TIMEOUT/100;        //unit is second
 
+#if ( HOST_CONFIG & OBSERVER_CFG )
+    gapDevDiscReq_t sbp_scanparam;
+    #define MAX_SCAN   10
+    gapDevRec_t scanlist[MAX_SCAN];
+    static uint8 scannum = 0;
+#endif
 
 // GAP GATT Attributes
 static uint8 attDeviceName[GAP_DEVICE_NAME_LEN] = "BUMBLE- -FFFFFF ";
@@ -333,6 +346,28 @@ static simpleProfileCBs_t simpleBLEPeripheral_SimpleProfileCBs =
 void SimpleBLEPeripheral_Init( uint8 task_id )
 {
     simpleBLEPeripheral_TaskID = task_id;
+    #if ( HOST_CONFIG & OBSERVER_CFG )
+    {
+        uint16 scan_window = 0x30;//unit 625us
+        uint16 scan_interval = 0x30;//unit 625us
+        GAP_SetParamValue( TGAP_GEN_DISC_SCAN_WIND, scan_window );
+        GAP_SetParamValue( TGAP_GEN_DISC_SCAN_INT, scan_interval );
+        GAP_SetParamValue( TGAP_CONN_SCAN_WIND, scan_window );
+        GAP_SetParamValue( TGAP_CONN_SCAN_INT, scan_interval );
+        GAP_SetParamValue( TGAP_FILTER_ADV_REPORTS, TRUE);
+        GAP_SetParamValue( TGAP_GEN_DISC_SCAN, 5000 );
+        GAP_SetParamValue( TGAP_CONN_SCAN_INT,scan_interval );
+        GAP_SetParamValue( TGAP_CONN_SCAN_WIND,scan_window);
+        GAP_SetParamValue(TGAP_SCAN_RSP_RSSI_MIN,(uint16)(-100));
+        sbp_scanparam.activeScan = TRUE;
+        sbp_scanparam.mode = DEVDISC_MODE_ALL; //DEVDISC_MODE_GENERAL;
+        sbp_scanparam.whiteList = GAP_FILTER_POLICY_ALL;
+        sbp_scanparam.taskID = simpleBLEPeripheral_TaskID;
+        //for adv report performance test disable gap filter
+        // extern uint32* pGlobal_config;
+        // pGlobal_config[LL_SWITCH] |=GAP_DUP_RPT_FILTER_DISALLOW;
+    }
+    #endif
     // Setup the GAP
     VOID GAP_SetParamValue( TGAP_CONN_PAUSE_PERIPHERAL, DEFAULT_CONN_PAUSE_PERIPHERAL );
     // Setup the GAP Peripheral Role Profile
@@ -389,7 +424,7 @@ void SimpleBLEPeripheral_Init( uint8 task_id )
     // Setup the GAP Bond Manager, add 2017-11-15
     {
         uint32 passkey = DEFAULT_PASSCODE;
-        uint8 pairMode = GAPBOND_PAIRING_MODE_WAIT_FOR_REQ;
+        uint8 pairMode = GAPBOND_PAIRING_MODE_INITIATE ;//GAPBOND_PAIRING_MODE_WAIT_FOR_REQ;
         uint8 mitm = TRUE;
         uint8 ioCap = GAPBOND_IO_CAP_NO_INPUT_NO_OUTPUT;
         uint8 bonding = TRUE;
@@ -404,7 +439,9 @@ void SimpleBLEPeripheral_Init( uint8 task_id )
     GGS_AddService( GATT_ALL_SERVICES );            // GAP
     GATTServApp_AddService( GATT_ALL_SERVICES );    // GATT attributes
     //DevInfo_AddService();                           // Device Information Service
+    #ifdef PHY_OTA_ENABLE
     ota_app_AddService();
+    #endif
     SimpleProfile_AddService( GATT_ALL_SERVICES );  // Simple GATT Profile
     // Setup the SimpleProfile Characteristic Values
     {
@@ -481,6 +518,9 @@ void SimpleBLEPeripheral_Init( uint8 task_id )
     #endif
     LL_PLUS_PerStats_Init(&g_perStatsByChanTest);
     LOG("======================SimpleBLEPeripheral_Init Done====================\n");
+    #ifdef DBG_SPIF_TEST
+    osal_start_timerEx(simpleBLEPeripheral_TaskID, SBP_SPIF_FLASH_TEST_EVT, 500);
+    #endif
 }
 
 /*********************************************************************
@@ -535,6 +575,42 @@ uint16 SimpleBLEPeripheral_ProcessEvent( uint8 task_id, uint16 events )
         return ( events ^ SBP_ADD_RL_EVT );
     }
 
+    #ifdef DBG_SPIF_TEST
+#define FLASH_TEST_ADDR 0x11070000
+
+    if ( events & SBP_SPIF_FLASH_TEST_EVT )
+    {
+        static int s_flash_loop = 0;
+
+        if((s_flash_loop % 10) == 0)
+        {
+            LOG(">>>>>>>>>>>>>>>>>>>Flash erase\n");
+
+            if(gapProfileState == 5)
+            {
+                LOG("break\n");
+            }
+
+            hal_flash_erase_sector(FLASH_TEST_ADDR);
+        }
+        else
+        {
+            int icnt;
+            static uint32_t s_fwrite_buf[64];
+
+            for(icnt = 0; icnt< 64; icnt++)
+                s_fwrite_buf[icnt] = icnt + 0x12340000;
+
+            LOG(">>>>>>>>>>>>>>>>>>>Flash write\n");
+            hal_flash_write(FLASH_TEST_ADDR + 64*4 * ((icnt-1)%10), (uint8_t*)s_fwrite_buf, 64*4);
+        }
+
+        s_flash_loop ++;
+        osal_start_timerEx(simpleBLEPeripheral_TaskID, SBP_SPIF_FLASH_TEST_EVT, 500);
+        return ( events ^ SBP_SPIF_FLASH_TEST_EVT );
+    }
+
+    #endif /*DBG_SPIF_TEST*/
     #if (1==DBG_RTC_TEST)
 
     if (events & SBP_RTC_TEST_EVT)
@@ -568,6 +644,25 @@ uint16 SimpleBLEPeripheral_ProcessEvent( uint8 task_id, uint16 events )
             dTime, counter_tracking, 0x3fffff- (g_TIM2_IRQ_TIM3_CurrCount >> 2), g_TIM2_IRQ_to_Sleep_DeltTick >> 2, testRtcCnt, g_TIM2_IRQ_PendingTick, 625 - (g_TIM2_wakeup_delay >> 2), g_osal_tick_trim);
         osal_start_timerEx(simpleBLEPeripheral_TaskID, SBP_RTC_TEST_EVT, 5000);
         return (events ^ SBP_RTC_TEST_EVT);
+    }
+
+    #endif
+    #if(1==DYNAMIC_CLK_CHG_TEST)
+
+    if (events & SBP_DYN_CLK_CHG_TEST_EVT)
+    {
+        uint8_t st=0;
+
+        do
+        {
+            //sysclk_t clk = g_system_clk== SYS_CLK_XTAL_16M ? SYS_CLK_DLL_64M:SYS_CLK_XTAL_16M;
+            st = hal_system_clock_change_active(SYS_CLK_DLL_64M,clk_change_mod_restore);
+            LOG("CLK CHANGE #%d %d %d\n",g_system_clk,g_system_clk_change,st);
+        }
+        while(st==1);
+
+        osal_start_timerEx(simpleBLEPeripheral_TaskID, SBP_DYN_CLK_CHG_TEST_EVT, 1000);
+        return (events ^ SBP_DYN_CLK_CHG_TEST_EVT);
     }
 
     #endif
@@ -688,9 +783,74 @@ uint16 SimpleBLEPeripheral_ProcessEvent( uint8 task_id, uint16 events )
     }
 
     #endif
+    #if ( HOST_CONFIG & OBSERVER_CFG )
+
+    if ( events & SBP_ENABLE_SCAN_EVT )
+    {
+        uint8_t ret=GAP_DeviceDiscoveryRequest(&sbp_scanparam);
+        LOG("START SCAN %d\n",ret);
+        return ( events ^ SBP_ENABLE_SCAN_EVT );
+    }
+
+    #endif
     // Discard unknown events
     return 0;
 }
+
+#if ( HOST_CONFIG & OBSERVER_CFG )
+static void simpleBLEPeripheral_ProcessGAPMsg( gapEventHdr_t* pMsg )
+{
+    if (pMsg->hdr.status != SUCCESS)
+        return;
+
+    switch (pMsg->opcode)
+    {
+    case GAP_DEVICE_DISCOVERY_EVENT:    //scan start/stop
+    {
+        scannum=0;
+        osal_memset(&scanlist,0,sizeof(gapDevRec_t)*MAX_SCAN);
+        osal_set_event(simpleBLEPeripheral_TaskID, SBP_ENABLE_SCAN_EVT);
+        break;
+    }
+
+    case GAP_DEVICE_INFO_EVENT:
+    {
+        gapDeviceInfoEvent_t* pKt = (gapDeviceInfoEvent_t*) pMsg;
+
+        if(scannum<MAX_SCAN)
+        {
+            uint8 i;
+
+            for(i = 0; i<scannum; i++)
+            {
+                if(pKt->eventType == scanlist[scannum].eventType &&
+                        pKt->addrType == scanlist[scannum].addrType &&
+                        osal_memcmp(pKt->addr,scanlist[scannum].addr,6))
+                    break;
+            }
+
+            if(i==scannum)
+            {
+                LOG("[ADV] %2d dBm [TYPE]%02x [ADDR][%02x]  ",pKt->rssi,pKt->eventType,pKt->addrType);
+                LOG("0x%02x:0x%02x:0x%02x:0x%02x:0x%02x:0x%02x\n",pKt->addr[0],pKt->addr[1],\
+                    pKt->addr[2],pKt->addr[3],pKt->addr[4],pKt->addr[5]);
+                // for(i=0;i<pKt->dataLen;i++)
+                // {
+                //     LOG("0x%02x ",pKt->pEvtData[i]);
+                // }
+                // LOG("\n");
+                scanlist[scannum].eventType = pKt->eventType;
+                scanlist[scannum].addrType = pKt->addrType;
+                osal_memcpy(scanlist[scannum].addr,pKt->addr,6);
+                scannum++;
+            }
+        }
+
+        break;
+    }
+    }
+}
+#endif
 
 /*********************************************************************
     @fn      simpleBLEPeripheral_ProcessOSALMsg
@@ -722,6 +882,16 @@ static void simpleBLEPeripheral_ProcessOSALMsg( osal_event_hdr_t* pMsg )
             break;
         }
     }
+
+    #if ( HOST_CONFIG & OBSERVER_CFG )
+
+    case GAP_MSG_EVENT:
+    {
+        simpleBLEPeripheral_ProcessGAPMsg( (gapEventHdr_t*)pMsg );
+        break;
+    }
+
+    #endif
     }
 }
 /*********************************************************************
@@ -794,6 +964,9 @@ static void peripheralStateNotificationCB( gaprole_States_t newState )
         #endif
         //osal_start_timerEx(simpleBLEPeripheral_TaskID, SBP_RESET_ADV_EVT, 500);
         osal_set_event(simpleBLEPeripheral_TaskID, SBP_RESET_ADV_EVT);
+        #if ( HOST_CONFIG & OBSERVER_CFG )
+        osal_set_event(simpleBLEPeripheral_TaskID, SBP_ENABLE_SCAN_EVT);
+        #endif
     }
     break;
 
@@ -1209,8 +1382,6 @@ void check_PerStatsProcess(void)
         perTxNumTotal);
     LL_PLUS_PerStatsReset();
 }
-
-
 
 /*********************************************************************
 *********************************************************************/

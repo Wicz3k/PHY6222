@@ -48,18 +48,30 @@
 
 /* Application */
 #include "adc_demo.h"
+#include "adc_poilling_demo.h"
+#include "adc_compare_demo.h"
+#include "voice_demo.h"
+#include "adc_config.h"
 /*********************************************************************
     GLOBAL VARIABLES
 */
 
 // The order in this table must be identical to the task initialization calls below in osalInitTask.
-const pTaskEventHandlerFn tasksArr[] =
+__ATTR_SECTION_SRAM__ const pTaskEventHandlerFn tasksArr[] =
 {
     LL_ProcessEvent,
-    adc_ProcessEvent
+    #if (APP_RUN_MODE == ADC_RUNMODE_INTERRUPT)
+    adc_ProcessEvent,
+    #elif (APP_RUN_MODE == ADC_RUNMODE_POLLING)
+    adc_Poilling_ProcessEvent,
+    #elif (APP_RUN_MODE == ADC_RUNMODE_COMPARE)
+    adc_Compare_ProcessEvent,
+    #elif (APP_RUN_MODE == VOICE_RUNMODE)
+    voice_ProcessEvent
+    #endif
 };
 
-const uint8 tasksCnt = sizeof( tasksArr ) / sizeof( tasksArr[0] );
+__ATTR_SECTION_SRAM__ const uint8 tasksCnt = sizeof( tasksArr ) / sizeof( tasksArr[0] );
 uint16* tasksEvents;
 
 /*********************************************************************
@@ -84,7 +96,15 @@ void osalInitTasks( void )
     /*
         Application
     */
-    adc_Init( taskID );
+    #if(APP_RUN_MODE == ADC_RUNMODE_INTERRUPT)
+    adc_Init( taskID++ );
+    #elif (APP_RUN_MODE == ADC_RUNMODE_POLLING)
+    adc_Poilling_Init( taskID++ );
+    #elif (APP_RUN_MODE == ADC_RUNMODE_COMPARE)
+    adc_Compare_Init( taskID++ );
+    #elif (APP_RUN_MODE == VOICE_RUNMODE)
+    voice_Init(taskID);
+    #endif
 }
 
 /*********************************************************************

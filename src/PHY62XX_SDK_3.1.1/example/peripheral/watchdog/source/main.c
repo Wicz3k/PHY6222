@@ -63,8 +63,8 @@ extern void hal_rom_boot_init(void);
 */
 
 #define   BLE_MAX_ALLOW_CONNECTION              1
-#define   BLE_MAX_ALLOW_PKT_PER_EVENT_TX        4
-#define   BLE_MAX_ALLOW_PKT_PER_EVENT_RX        4
+#define   BLE_MAX_ALLOW_PKT_PER_EVENT_TX        3
+#define   BLE_MAX_ALLOW_PKT_PER_EVENT_RX        3
 #define   BLE_PKT_VERSION                       BLE_PKT_VERSION_5_1 //BLE_PKT_VERSION_5_1 //BLE_PKT_VERSION_5_1     
 
 
@@ -197,7 +197,8 @@ static void hal_rfphy_init(void)
     g_rfPhyFreqOffSet   =RF_PHY_FREQ_FOFF_00KHZ;
     //============config xtal 16M cap
     XTAL16M_CAP_SETTING(0x09);
-    XTAL16M_CURRENT_SETTING(0x01);
+    XTAL16M_CURRENT_SETTING(0x03);
+    hal_rc32k_clk_tracking_init();
     hal_rom_boot_init();
     watchdog_config(WDG_8S);
     NVIC_SetPriority((IRQn_Type)BB_IRQn,    IRQ_PRIO_REALTIME);
@@ -217,7 +218,6 @@ static void hal_init(void)
     hal_pwrmgr_init();
     xflash_Ctx_t cfg =
     {
-        .spif_ref_clk   =   SYS_CLK_RC_32M,
         .rd_instr       =   XFRD_FCMD_READ_DUAL
     };
     hal_spif_cache_init(cfg);
@@ -233,7 +233,7 @@ int  main(void)
     g_system_clk = SYS_CLK_XTAL_16M;//SYS_CLK_XTAL_16M;//SYS_CLK_DLL_64M;
     g_clk32K_config = CLK_32K_RCOSC;//CLK_32K_XTAL;//CLK_32K_XTAL,CLK_32K_RCOSC
     #if(FLASH_PROTECT_FEATURE == 1)
-    hal_flash_lock();
+    hal_flash_enable_lock(MAIN_INIT);
     #endif
     drv_irq_init();
     init_config();

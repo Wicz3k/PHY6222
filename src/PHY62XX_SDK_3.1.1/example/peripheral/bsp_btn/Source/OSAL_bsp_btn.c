@@ -54,14 +54,16 @@
 */
 
 // The order in this table must be identical to the task initialization calls below in osalInitTask.
-const pTaskEventHandlerFn tasksArr[] =
+__ATTR_SECTION_SRAM__ const pTaskEventHandlerFn tasksArr[] =
 {
     LL_ProcessEvent,
-    Demo_ProcessEvent,
+    #if ((BSP_BTN_HARDWARE_CONFIG == BSP_BTN_JUST_KSCAN) || (BSP_BTN_HARDWARE_CONFIG == BSP_BTN_GPIO_AND_KSCAN))
     Bsp_Btn_ProcessEvent,
+    #endif
+    Demo_ProcessEvent,
 };
 
-const uint8 tasksCnt = sizeof( tasksArr ) / sizeof( tasksArr[0] );
+__ATTR_SECTION_SRAM__ const uint8 tasksCnt = sizeof(tasksArr) / sizeof(tasksArr[0]);
 uint16* tasksEvents;
 
 /*********************************************************************
@@ -77,15 +79,17 @@ uint16* tasksEvents;
 
     @return  none
 */
-void osalInitTasks( void )
+void osalInitTasks(void)
 {
     uint8 taskID = 0;
-    tasksEvents = (uint16*)osal_mem_alloc( sizeof( uint16 ) * tasksCnt);
-    osal_memset( tasksEvents, 0, (sizeof( uint16 ) * tasksCnt));
-    LL_Init( taskID++ );
+    tasksEvents = (uint16*)osal_mem_alloc(sizeof(uint16) * tasksCnt);
+    osal_memset(tasksEvents, 0, (sizeof(uint16) * tasksCnt));
+    LL_Init(taskID++);
     /* Application */
-    Demo_Init( taskID++);
-    Bsp_Btn_Init(taskID);
+    #if ((BSP_BTN_HARDWARE_CONFIG == BSP_BTN_JUST_KSCAN) || (BSP_BTN_HARDWARE_CONFIG == BSP_BTN_GPIO_AND_KSCAN))
+    Bsp_Btn_Init(taskID++);
+    #endif
+    Demo_Init(taskID++);
 }
 
 /*********************************************************************

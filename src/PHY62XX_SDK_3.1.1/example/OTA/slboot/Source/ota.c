@@ -108,10 +108,6 @@ extern uint8       g_largeHeap[];
     EXTERNAL FUNCTIONS
 */
 
-bStatus_t GAPBondMgr_LinkEst(uint8 addrType, uint8* pDevAddr, uint16 connHandle, uint8 role)
-{
-    return 0;
-}
 
 /*********************************************************************
     LOCAL VARIABLES

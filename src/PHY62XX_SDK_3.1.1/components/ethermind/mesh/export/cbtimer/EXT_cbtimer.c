@@ -48,8 +48,8 @@ EXT_CBTIMER_ENTITY* ext_cbtimer_q_end   = NULL;
 // Total number of callback timers
 #define EXT_NUM_CBTIMERS                   ( CBTIMER_NUM_TASKS * EXT_NUM_CBTIMERS_PER_TASK )
 
-#define ext_timer_malloc            EM_alloc_mem
-#define ext_timer_free              EM_free_mem
+#define ext_timer_malloc            osal_mem_alloc
+#define ext_timer_free              osal_mem_free
 
 
 typedef struct
@@ -358,7 +358,9 @@ EM_RESULT EXT_cbtimer_start_timer
     EM_RESULT retval;
     EXT_CBTIMER_ENTITY current_timer;
     // HZF
+    HAL_ENTER_CRITICAL_SECTION();
     osalTimeUpdate();
+    HAL_EXIT_CRITICAL_SECTION();
 
     if (NULL == handle)
     {
@@ -590,7 +592,9 @@ EM_RESULT EXT_cbtimer_stop_timer
         return EXT_CBTIMER_HANDLE_IS_NULL;
     }
 
+    HAL_ENTER_CRITICAL_SECTION();
     osalTimeUpdate();
+    HAL_EXIT_CRITICAL_SECTION();
     retval = EM_FAILURE;
     /* Lock Timer */
 //    timer_lock();

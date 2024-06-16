@@ -50,7 +50,7 @@
     #define RTC_CNT_RANGE 0x100000000
     #define TM_RATE (1000000/625)
 #else
-    #define RTC_CNT_RANGE 0x1000000
+    #define RTC_CNT_RANGE 0x100000000 // for 32bit rtc
     #define TM_RATE (32768)
 #endif
 #define DT_INTV_SYNC 60    //sync interval every 60s

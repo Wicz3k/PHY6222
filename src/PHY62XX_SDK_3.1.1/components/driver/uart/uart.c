@@ -52,6 +52,9 @@
 
 #define UART_TX_BUFFER_SIZE   256
 
+static bool m_uart0_even_parity;
+static bool m_uart1_even_parity;
+
 typedef struct _uart_Context
 {
     bool          enable;
@@ -250,8 +253,6 @@ static int uart_hw_deinit(UART_INDEX_e uart_index)
     }
 
     NVIC_DisableIRQ(irq_type);
-    hal_gpio_fmux(m_uartCtx[uart_index].cfg.tx_pin,Bit_DISABLE);
-    hal_gpio_fmux(m_uartCtx[uart_index].cfg.rx_pin,Bit_DISABLE);
     cur_uart->LCR=0x80;
     cur_uart->DLM=0;
     cur_uart->DLL=0;
@@ -271,6 +272,8 @@ static int uart_hw_deinit(UART_INDEX_e uart_index)
         JUMP_FUNCTION(UART1_IRQ_HANDLER)   =   0;
     }
 
+    hal_gpio_fmux(m_uartCtx[uart_index].cfg.tx_pin,Bit_DISABLE);
+    hal_gpio_fmux(m_uartCtx[uart_index].cfg.rx_pin,Bit_DISABLE);
     return PPlus_SUCCESS;
 }
 
@@ -306,10 +309,11 @@ static int uart_hw_init(UART_INDEX_e uart_index)
 //      hal_gpio_fmux(P9, Bit_DISABLE);
 //      hal_gpio_fmux(P10, Bit_DISABLE);
 //  }
-    hal_gpio_pull_set(pcfg->tx_pin, GPIO_PULL_UP);
-    hal_gpio_pull_set(pcfg->rx_pin, GPIO_PULL_UP);
-    hal_gpio_fmux_set(pcfg->tx_pin, fmux_tx);
-    hal_gpio_fmux_set(pcfg->rx_pin, fmux_rx);
+    //ADD DUMMY PIN TO FMUX(P27)
+    hal_gpio_pull_set(P27, GPIO_PULL_UP_S);
+    hal_gpio_pull_set(P27, GPIO_PULL_UP_S);
+    hal_gpio_fmux_set(P27, fmux_tx);
+    hal_gpio_fmux_set(P27, fmux_rx);
     cur_uart->LCR =0;
     dll = ((pclk>>4)+(pcfg->baudrate>>1))/pcfg->baudrate;
     cur_uart->MCR=0x0;
@@ -318,9 +322,22 @@ static int uart_hw_init(UART_INDEX_e uart_index)
     cur_uart->DLL=(dll & 0xFF);
 
     if(pcfg->parity)
-        cur_uart->LCR = 0x1b; //8bit, 1 stop even parity
+    {
+        bool even_parity = cur_uart==AP_UART0?m_uart0_even_parity:m_uart1_even_parity;
+
+        if(even_parity)
+        {
+            cur_uart->LCR = 0x1B;   // 8bit, 1 stop even parity
+        }
+        else
+        {
+            cur_uart->LCR = 0x0B;   // 8bit, 1 stop odd parity
+        }
+    }
     else
-        cur_uart->LCR = 0x3;  //8bit, 1 stop no parity
+    {
+        cur_uart->LCR = 0x3;        // 8bit, 1 stop no parity
+    }
 
     if(pcfg->use_fifo)//set fifo, enable tx FIFO mode(empty trigger), rx FIFO mode(1/2 trigger)
         cur_uart->FCR= FCR_TX_FIFO_RESET|FCR_RX_FIFO_RESET|FCR_FIFO_ENABLE|UART_FIFO_RX_TRIGGER|UART_FIFO_TX_TRIGGER;
@@ -335,6 +352,13 @@ static int uart_hw_init(UART_INDEX_e uart_index)
 
     if(pcfg->use_tx_buf)
         cur_uart->IER |= IER_ETBEI;
+
+    hal_gpio_pull_set(pcfg->tx_pin, GPIO_PULL_UP_S);
+    hal_gpio_pull_set(pcfg->rx_pin, GPIO_PULL_UP_S);
+    hal_gpio_fmux_set(pcfg->tx_pin, fmux_tx);
+    hal_gpio_fmux_set(pcfg->rx_pin, fmux_rx);
+    hal_gpio_fmux(P27, Bit_DISABLE);
+    hal_gpio_pull_set(P27, GPIO_PULL_DOWN);
 
     if(uart_index== UART0)
     {
@@ -364,7 +388,7 @@ static int uart_hw_init(UART_INDEX_e uart_index)
 
     @return      None.
  **************************************************************************************/
-void __ATTR_SECTION_SRAM__  __attribute__((used)) hal_UART0_IRQHandler(void)
+void  __attribute__((used)) hal_UART0_IRQHandler(void)
 {
     uint8_t IRQ_ID= (AP_UART0->IIR & 0x0f);
 
@@ -397,7 +421,7 @@ void __ATTR_SECTION_SRAM__  __attribute__((used)) hal_UART0_IRQHandler(void)
     }
 }
 
-void __ATTR_SECTION_SRAM__  __attribute__((used)) hal_UART1_IRQHandler(void)
+void  __attribute__((used)) hal_UART1_IRQHandler(void)
 {
     uint8_t IRQ_ID= (AP_UART1->IIR & 0x0f);
 
@@ -532,5 +556,24 @@ int hal_uart_send_byte(UART_INDEX_e uart_index,unsigned char data)
     HAL_WAIT_CONDITION_TIMEOUT((cur_uart->LSR & LSR_THRE), 10000);
     cur_uart->THR=data;
     HAL_WAIT_CONDITION_TIMEOUT((cur_uart->LSR & LSR_TEMT), 10000);
+    return PPlus_SUCCESS;
+}
+
+int hal_uart_get_parity_plan(UART_INDEX_e uart_index)
+{
+    return (uart_index==UART0?m_uart0_even_parity:m_uart1_even_parity);
+}
+
+int hal_uart_set_parity_plan(UART_INDEX_e uart_index, bool even_parity)
+{
+    if(uart_index == UART0)
+    {
+        m_uart0_even_parity = even_parity;
+    }
+    else if(uart_index == UART1)
+    {
+        m_uart1_even_parity = even_parity;
+    }
+
     return PPlus_SUCCESS;
 }

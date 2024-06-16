@@ -48,7 +48,7 @@ extern "C"
 #include "l2cap.h"
 #include "smp.h"
 #include "linkdb.h"
-
+#include "gap.h"
 /*********************************************************************
     MACROS
 */
@@ -177,7 +177,7 @@ typedef struct
 // Security Manager's OSAL task ID
 extern uint8 smTaskID;
 
-extern smPairingParams_t* pPairingParams[];
+extern smPairingParams_t** pPairingParams;
 
 extern smResponderCBs_t* pfnResponderCBs;
 
@@ -381,6 +381,7 @@ extern void smRegisterResponder( smResponderCBs_t* pfnCBs );
 */
 extern void smTo_timerCB( uint8* pData );
 extern void smState_timerCB( uint8* pData );
+extern uint8 smRegisterPairingContent(uint8 max_conn_num, smPairingParams_t** param);
 
 /*********************************************************************
 *********************************************************************/

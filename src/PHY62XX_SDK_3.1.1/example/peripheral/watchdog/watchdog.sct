@@ -26,6 +26,6 @@ LR_ROM_XIP  0x11020000 0x020000 {
   ER_ROM_XIP 0x11020000 0x020000  {  ; load address = execution address
    uart.o(+RO)
    gpio.o(+RO)
-   *.o(_section_xip_code_)
+   *.o(_section_xip_code_, _func_xip_code_.*)
   }
  } 

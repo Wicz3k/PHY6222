@@ -42,6 +42,7 @@
 #include "rf_phy_driver.h"
 #include "flash.h"
 #include "version.h"
+#include "cliface.h"
 
 #define DEFAULT_UART_BAUD   115200
 
@@ -196,7 +197,8 @@ static void hal_rfphy_init(void)
     g_rfPhyFreqOffSet   =RF_PHY_FREQ_FOFF_00KHZ;
     //============config xtal 16M cap
     XTAL16M_CAP_SETTING(0x09);
-    XTAL16M_CURRENT_SETTING(0x01);
+    XTAL16M_CURRENT_SETTING(0x03);
+    hal_rc32k_clk_tracking_init();
     hal_rom_boot_init();
     NVIC_SetPriority((IRQn_Type)BB_IRQn,    IRQ_PRIO_REALTIME);
     NVIC_SetPriority((IRQn_Type)TIM1_IRQn,  IRQ_PRIO_HIGH);     //ll_EVT
@@ -215,11 +217,11 @@ static void hal_init(void)
     hal_pwrmgr_init();
     xflash_Ctx_t cfg =
     {
-        .spif_ref_clk   =   SYS_CLK_RC_32M,
         .rd_instr       =   XFRD_FCMD_READ_DUAL //XFRD_FCMD_READ
     };
     hal_spif_cache_init(cfg);
-    LOG_INIT();
+    //LOG_INIT();
+    CLI_UART_INIT("fstcmd>>:");
     hal_gpio_init();
 }
 
@@ -227,10 +229,10 @@ static void hal_init(void)
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 int  main(void)
 {
-    g_system_clk = SYS_CLK_DBL_32M;//SYS_CLK_DLL_64M;//SYS_CLK_XTAL_16M;
+    g_system_clk = SYS_CLK_DLL_48M;
     g_clk32K_config = CLK_32K_RCOSC;//CLK_32K_XTAL;//CLK_32K_XTAL,CLK_32K_RCOSC
     #if(FLASH_PROTECT_FEATURE == 1)
-    hal_flash_lock();
+    hal_flash_enable_lock(MAIN_INIT);
     #endif
     drv_irq_init();
     init_config();

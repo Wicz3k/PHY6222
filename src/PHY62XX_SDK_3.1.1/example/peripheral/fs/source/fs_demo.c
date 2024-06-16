@@ -45,8 +45,12 @@
 #include "gpio.h"
 #include "clock.h"
 #include "timer.h"
-#include "fs_test.h"
+//#include "fs_test.h"
+
 #include "fs_demo.h"
+#include "cliface.h"
+#include "fs_autotest.h"
+
 #include "log.h"
 
 static uint8 fs_TaskID;
@@ -62,9 +66,12 @@ static uint8 fs_TaskID;
     @return
 */
 
-void fs_Init( uint8 task_id )
-{
-    fs_TaskID = task_id;
+/*
+    void fs_Init( uint8 task_id )
+    {
+
+      fs_TaskID = task_id;
+
     #if (FS_TEST_TYPE == FS_MODULE_TEST)
     osal_start_timerEx(fs_TaskID, FS_TEST_EVT,1000);
     #elif (FS_TEST_TYPE == FS_EXAMPLE)
@@ -74,11 +81,11 @@ void fs_Init( uint8 task_id )
     #elif (FS_TEST_TYPE == FS_XIP_TEST)
     osal_start_timerEx(fs_TaskID, FS_XIP_EVT,1000);
     #else
-#error please check your config parameter
+    #error please check your config parameter
     #endif
-}
-uint16 fs_ProcessEvent( uint8 task_id, uint16 events )
-{
+    }
+    uint16 fs_ProcessEvent( uint8 task_id, uint16 events )
+    {
     if (events & FS_TEST_EVT)
     {
         #if (FS_TEST_TYPE == FS_MODULE_TEST)
@@ -119,5 +126,38 @@ uint16 fs_ProcessEvent( uint8 task_id, uint16 events )
     }
 
     return 0;
+    }
+*/
+void CLI_msg_send(uint8_t* pmsg)
+{
+    osal_msg_send(fs_TaskID, pmsg);
 }
 
+
+void fs_Init( uint8 task_id )
+{
+    fs_TaskID = task_id;
+    fst_cmd_register();
+}
+uint16 fs_ProcessEvent( uint8 task_id, uint16 events )
+{
+    if ( events & SYS_EVENT_MSG )
+    {
+        osal_event_hdr_t* pmsg;
+        pmsg =  (osal_event_hdr_t*)osal_msg_receive( fs_TaskID);
+
+        if((pmsg) != NULL)
+        {
+            if(pmsg->event == CLI_OSAL_MSG_EVENT)
+            {
+                extern void CLI_cmd_msg_handler(osal_event_hdr_t* pmsg);
+                CLI_cmd_msg_handler(pmsg);
+            }
+
+            VOID osal_msg_deallocate( (uint8_t*) pmsg );
+            return (events ^ SYS_EVENT_MSG);
+        }
+    }
+
+    return 0;
+}

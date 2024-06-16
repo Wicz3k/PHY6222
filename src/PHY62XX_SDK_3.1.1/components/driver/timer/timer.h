@@ -41,6 +41,11 @@ extern "C" {
 
 #define FREE_TIMER_NUMBER 2
 
+#if (TIM2_IRQHANDLER1_ENABLE==TRUE)
+#define JUMP_TIM2_IRQHANDLER1_FUNCTION() do { \
+        JUMP_FUNCTION(V21_IRQ_HANDLER) = (uint32_t)&TIM2_IRQHandler1; \
+    }while(0);
+#endif
 typedef enum
 {
     AP_TIMER_ID_5 = 5,
@@ -70,6 +75,10 @@ int hal_timer_stop(User_Timer_e timeId);
 
 void __attribute__((used)) hal_TIMER5_IRQHandler(void);
 void __attribute__((used)) hal_TIMER6_IRQHandler(void);
+
+#if (TIM2_IRQHANDLER1_ENABLE==TRUE)
+void __attribute__((used)) TIM2_IRQHandler1(void);
+#endif
 
 extern void set_timer(AP_TIM_TypeDef* TIMx, int time);
 

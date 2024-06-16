@@ -1,4 +1,4 @@
-﻿
+
 /**
     \file MS_limits.h
 
@@ -33,7 +33,7 @@
     Minimum Value: 2
     Maximum Value: can be anything.
 */
-#define MS_NET_CACHE_SIZE                              30       //10->30 by ZQ
+#define MS_NET_CACHE_SIZE                              100//30       //10->30 by ZQ
 
 /*
     Maximum number of subnets the device can store information about.
@@ -51,7 +51,7 @@
     Minimum Value: 1
     Maximum Value: can be anything.
 */
-#define MS_MAX_DEV_KEYS                                5
+#define MS_MAX_DEV_KEYS                                48
 
 /*
     Maximum number of addresses present in each proxy filter list.
@@ -59,7 +59,16 @@
     Minimum Value: 1
     Maximum Value: can be anything.
 */
-#define MS_PROXY_FILTER_LIST_SIZE                      5
+#define MS_PROXY_FILTER_LIST_SIZE                      16
+
+/*
+    Maximum number of addresses present in each connect proxy filter list.
+
+    Minimum Value: 1
+    Maximum Value: can be anything.
+*/
+#define MS_PROXY_FILTER_DYNAMIC_LIST_SIZE              1
+
 
 /*
     The distance between the network sequence numbers, for every persistent
@@ -117,7 +126,7 @@
     Minimum Value: 2
     Maximum Value: can be anything.
 */
-#define MS_REPLAY_CACHE_SIZE                           30
+#define MS_REPLAY_CACHE_SIZE                           48
 
 /*
     Reassembled SAR Rx cache is to avoid handling of segmented frames

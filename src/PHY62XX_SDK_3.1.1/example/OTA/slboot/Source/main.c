@@ -44,6 +44,7 @@
 #include "version.h"
 #include "ota_protocol.h"
 #include "slboot.h"
+#include "global_config.h"
 
 #define DEFAULT_UART_BAUD   115200
 
@@ -56,8 +57,6 @@
     EXTERNAL FUNCTIONS
 */
 
-extern void init_config(void);
-extern int app_main(void);
 extern void hal_rom_boot_init(void);
 extern void ota_main(void);
 /*********************************************************************
@@ -176,6 +175,7 @@ static void hal_low_power_io_init(void)
     hal_pwrmgr_LowCurrentLdo_enable();
 }
 
+#if 0
 static void ble_mem_init_config(void)
 {
 //    osal_mem_set_heap((osalMemHdr_t*)g_largeHeap, LARGE_HEAP_SIZE);
@@ -189,6 +189,7 @@ static void ble_mem_init_config(void)
     LL_EXT_Init_IQ_pBuff(g_llCteSampleI,g_llCteSampleQ);
     #endif
 }
+#endif
 
 static void hal_rfphy_init(void)
 {
@@ -200,14 +201,15 @@ static void hal_rfphy_init(void)
     g_rfPhyFreqOffSet   =RF_PHY_FREQ_FOFF_00KHZ;
     //============config xtal 16M cap
     XTAL16M_CAP_SETTING(0x09);
-    XTAL16M_CURRENT_SETTING(0x01);
+    XTAL16M_CURRENT_SETTING(0x03);
+    hal_rc32k_clk_tracking_init();
     hal_rom_boot_init();
     NVIC_SetPriority((IRQn_Type)BB_IRQn,    IRQ_PRIO_REALTIME);
     NVIC_SetPriority((IRQn_Type)TIM1_IRQn,  IRQ_PRIO_HIGH);     //ll_EVT
     NVIC_SetPriority((IRQn_Type)TIM2_IRQn,  IRQ_PRIO_HIGH);     //OSAL_TICK
     NVIC_SetPriority((IRQn_Type)TIM4_IRQn,  IRQ_PRIO_HIGH);     //LL_EXA_ADV
     //ble memory init and config
-    ble_mem_init_config();
+    //ble_mem_init_config();
 }
 
 
@@ -219,7 +221,6 @@ static void hal_init(void)
     hal_pwrmgr_init();
     xflash_Ctx_t cfg =
     {
-        .spif_ref_clk   =   SYS_CLK_RC_32M,
         .rd_instr       =   XFRD_FCMD_READ_DUAL
     };
     hal_spif_cache_init(cfg);
@@ -228,16 +229,21 @@ static void hal_init(void)
     //LOG("all driver init OK!\n");
 }
 
+extern uint32* pGlobal_config;
+static void init_config(void)
+{
+    pGlobal_config = (uint32*)(CONFIG_BASE_ADDR);
+    int i;
 
+    for (i = 0; i < 256; i ++)
+        pGlobal_config[i] = 0;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 int  main(void)
 {
-    g_system_clk = SYS_CLK_DBL_32M;
+    g_system_clk = SYS_CLK_DLL_48M;
     g_clk32K_config = CLK_32K_RCOSC;//CLK_32K_XTAL;//CLK_32K_XTAL,CLK_32K_RCOSC
-    #if(FLASH_PROTECT_FEATURE == 1)
-    hal_flash_lock();
-    #endif
     drv_irq_init();
     init_config();
     hal_rfphy_init();

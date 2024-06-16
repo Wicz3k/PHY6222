@@ -48,12 +48,15 @@
 
 #include "nvs.h"
 
-#include "cliface.h"
+//#include "cliface.h"
 
 #include "mesh_clients.h"
 #include "access_extern.h"
 #include "MS_config_api.h"
 #include "vendormodel_server.h"
+
+
+
 
 /*********************************************************************
     LOCAL FUNCTIONS
@@ -63,6 +66,8 @@ API_RESULT cli_raw_data(UINT32 argc, UCHAR* argv[]);
 API_RESULT cli_get_information(UINT32 argc, UCHAR* argv[]);
 
 API_RESULT cli_disp_key(UINT32 argc, UCHAR* argv[]);
+
+API_RESULT cli_mesh_stack_clear(UINT32 argc, UCHAR* argv[]);
 
 API_RESULT cli_demo_reset(UINT32 argc, UCHAR* argv[]);
 
@@ -85,6 +90,12 @@ API_RESULT cli_core_modelc_config_key_refresh_phase_set(UINT32 argc, UCHAR* argv
 API_RESULT cli_core_modelc_config_netkey_update(UINT32 argc, UCHAR* argv[]);
 
 API_RESULT cli_demo_help(UINT32 argc, UCHAR* argv[]);
+
+API_RESULT cli_seg_send(UINT32 argc, UCHAR* argv[]);
+
+API_RESULT cli_snb(UINT32 argc, UCHAR* argv[]);
+
+API_RESULT cli_send_pdu(UINT32 argc, UCHAR* argv[]);
 
 #endif
 

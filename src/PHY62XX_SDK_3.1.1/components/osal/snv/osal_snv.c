@@ -32,7 +32,7 @@
 
 
 #include <stdint.h>
-#include "osal.h"
+#include "OSAL.h"
 #include "flash.h"
 #include "error.h"
 #include "osal_snv.h"
@@ -105,14 +105,18 @@ uint8 osal_snv_read( osalSnvId_t id, osalSnvLen_t len, void* pBuf)
 uint8 osal_snv_write( osalSnvId_t id, osalSnvLen_t len, void* pBuf)
 {
     int ret = PPlus_SUCCESS;
+    uint32_t free_size = 0;
     LOG("osal_snv_write:%x,%d\n",id,len);
     LOG_DUMP_BYTE(pBuf, len);
+    hal_fs_get_free_size(&free_size);
 
-    if(hal_fs_get_free_size() < len+32)
+    if(free_size < len+32)
     {
         if(hal_fs_get_garbage_size(NULL) > len+32)
         {
+            uint32_t t0 = rtc_get_counter();
             hal_fs_garbage_collect();
+            LOG("DO FS Garbage Collect Cost %d (rtcTick) \n",rtc_get_counter()-t0);
         }
         else
         {

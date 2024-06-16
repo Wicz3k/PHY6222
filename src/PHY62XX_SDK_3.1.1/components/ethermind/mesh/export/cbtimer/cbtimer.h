@@ -70,7 +70,7 @@ extern "C"
 */
 #define  CBTIMER_NUM_TASKS  1                 // set by HZF, align to  project setting
 #if ( CBTIMER_NUM_TASKS == 0 )
-#error Callback Timer module shouldn't be included (no callback timer is needed)!
+#error Callback Timer module should not be included (no callback timer is needed)!
 #elif ( CBTIMER_NUM_TASKS == 1 )
 #define CBTIMER_PROCESS_EVENT( a )          ( a )
 #elif ( CBTIMER_NUM_TASKS == 2 )

@@ -16,8 +16,6 @@
 #include <gap.h>
 #include <gatt.h>
 
-#undef BLE_CLIENT_ROLE
-
 /* Povisioning API headers */
 #include "MS_prov_api.h"
 
@@ -27,6 +25,8 @@
 #include "mesh_services.h"
 
 #include "appl_main.h"
+#include "MS_net_api.h"
+
 
 extern uint8             llState, llSecondaryState;
 
@@ -92,8 +92,8 @@ void blebrr_handle_evt_scan_complete (UINT8 enable);
 #define BLEBRR_NCON_ADVCHMAP                0x07
 #define BLEBRR_NCON_ADVFILTERPOLICY         0x00
 
-#define BLEBRR_CON_ADVINTMIN                0x320
-#define BLEBRR_CON_ADVINTMAX                0x320
+#define BLEBRR_CON_ADVINTMIN                0xA0
+#define BLEBRR_CON_ADVINTMAX                0xA0
 #define BLEBRR_CON_ADVTYPE                  0x00
 #define BLEBRR_CON_DIRADDRTYPE              0x00
 #define BLEBRR_CON_ADVCHMAP                 0x07
@@ -120,7 +120,11 @@ void blebrr_handle_evt_scan_complete (UINT8 enable);
 #define BLEBRR_ADVSCANEN_TIMEOUT            50
 
 /* Active connection handle used to send measurements */
-static uint16_t active_conn_hndl = BLEBRR_CONN_HNDL_INVALID;
+/*static*/ uint16_t active_conn_hndl = BLEBRR_CONN_HNDL_INVALID;
+#ifdef MS_PRIVATE_SUPPORT
+    uint16_t proxy_conn_hndl = BLEBRR_CONN_HNDL_INVALID;
+    uint16_t prov_conn_hndl = BLEBRR_CONN_HNDL_INVALID;
+#endif
 
 /* Call Back to Inform Application Layer about GATT Bearer Iface Events */
 typedef void (* blebrr_gatt_iface_event_pl_cb)
@@ -283,32 +287,74 @@ void appl_dump_bytes(UCHAR* buffer, UINT16 length)
 
 void blebrr_handle_evt_adv_report (gapDeviceInfoEvent_t* adv)
 {
-    UCHAR* pdata;
+    UCHAR* pdata; //to define
     UCHAR type;
     /* Reference the event type, data and datalength */
     type = (HCI_NONCONNECTABLE_UNDIRECTED_ADV == (UCHAR)adv->eventType)? BRR_BCON_PASSIVE: BRR_BCON_ACTIVE;
+//    EM_mem_copy(pdata, adv->pEvtData, adv->dataLen);
     pdata = (UCHAR*)adv->pEvtData;
-    #if 0
+    #ifdef BLE_CLIENT_ROLE
+    UINT8 p_active_data[80];
+    UINT16 len;
+    DECL_CONST UINT8 mesh_provision_service_uuid[4] = {0x15,0x16,LO_UINT16(MESH_PROVISIONING_SERVICE),HI_UINT16(MESH_PROVISIONING_SERVICE)};
+    DECL_CONST UINT8 mesh_proxy_nodeid_service_uuid[4] = {0x14,0x16,LO_UINT16(MESH_PROXY_SERVICE),HI_UINT16(MESH_PROXY_SERVICE)};
+    DECL_CONST UINT8 mesh_proxy_netid_service_uuid[4] = {0x0c,0x16,LO_UINT16(MESH_PROXY_SERVICE),HI_UINT16(MESH_PROXY_SERVICE)};
+    #endif
 
-    if (BRR_BCON_ACTIVE == type)
+    /* Pass advertising data to the bearer */
+    if ((BRR_BCON_PASSIVE == type)
+            &&((MESH_AD_TYPE_BCON == adv->pEvtData[1]) || (MESH_AD_TYPE_PB_ADV == adv->pEvtData[1]) || (MESH_AD_TYPE_PKT == adv->pEvtData[1])))
     {
-        BLEBRRPL_LOG("Adv Report. Type: 0x%02X\r\n", adv->eventType);
-        BLEBRRPL_LOG("BD Addr [0x%02X]: ", adv->addrType);
-        BLEBRRPL_dump_bytes(adv->addr, 6);
-        BLEBRRPL_LOG("Data [datalen]:");
-        BLEBRRPL_dump_bytes(pdata, (UCHAR)adv->dataLen);
+        EM_mem_copy(pdata, adv->pEvtData, adv->dataLen);
+        blebrr_pl_recv_advpacket (type, &pdata[1], pdata[0], (UCHAR)adv->rssi);
+    }
+
+    #ifdef BLE_CLIENT_ROLE
+    else if ((BRR_BCON_ACTIVE == type) && ((adv->dataLen == 29) || ((adv->dataLen == 28)) || ((adv->dataLen == 20))))
+    {
+        if((EM_mem_cmp(&adv->pEvtData[7], mesh_proxy_netid_service_uuid, 4) == 0) ||
+                (EM_mem_cmp(&adv->pEvtData[7], mesh_provision_service_uuid, 4) == 0) ||
+                (EM_mem_cmp(&adv->pEvtData[7], mesh_proxy_nodeid_service_uuid, 4) == 0))
+        {
+            EM_mem_copy(p_active_data, &adv->pEvtData[7], adv->pEvtData[7]+1);
+            EM_mem_copy(p_active_data + adv->pEvtData[7]+1, adv->addr, 6);
+
+            if(EM_mem_cmp(&adv->pEvtData[7], mesh_provision_service_uuid, 4) == 0)
+            {
+                len = p_active_data[0]+1;
+            }
+            else
+            {
+                len = p_active_data[0]+7;
+            }
+
+            blebrr_pl_recv_service_packet (type, &p_active_data[0], len, (UCHAR)adv->rssi);
+        }
+
+        #if 0
+
+        if((EM_mem_cmp(&adv->pEvtData[7], mesh_proxy_netid_service_uuid, 4) == 0))
+        {
+            EM_mem_copy(pdata, &adv->pEvtData[7], adv->pEvtData[7]+1);
+            EM_mem_copy(pdata + adv->pEvtData[7]+1, adv->addr, 6);
+            blebrr_pl_recv_service_packet (type, &pdata[0], pdata[0]+7, (UCHAR)adv->rssi);
+        }
+        else if((EM_mem_cmp(&adv->pEvtData[7], mesh_provision_service_uuid, 4) == 0))
+        {
+            EM_mem_copy(pdata, &adv->pEvtData[7], adv->pEvtData[7]+1);
+            blebrr_pl_recv_service_packet (type, &pdata[0], pdata[0]+1, (UCHAR)adv->rssi);
+        }
+        else if( (EM_mem_cmp(&adv->pEvtData[7], mesh_proxy_nodeid_service_uuid, 4) == 0))
+        {
+            EM_mem_copy(pdata, &adv->pEvtData[7], adv->pEvtData[7]+1);
+            EM_mem_copy(pdata + adv->pEvtData[7]+1, adv->addr, 6);
+            blebrr_pl_recv_service_packet (type, &pdata[0], pdata[0]+7, (UCHAR)adv->rssi);
+        }
+
+        #endif
     }
 
     #endif /* 0 */
-
-    /* Pass advertising data to the bearer */
-    if ((MESH_AD_TYPE_BCON == pdata[1]) || (MESH_AD_TYPE_PB_ADV == pdata[1]) || (MESH_AD_TYPE_PKT == pdata[1]))
-    {
-        if (BRR_BCON_PASSIVE == type)
-        {
-            blebrr_pl_recv_advpacket (type, &pdata[1], pdata[0], (UCHAR)adv->rssi);
-        }
-    }
 }
 
 void blebrr_handle_evt_adv_complete (UINT8 enable)
@@ -357,6 +403,7 @@ void blebrr_handle_evt_scan_complete (UINT8 enable)
             blebrr_connect_state = 0x02;
             /* Set GATT Role as Client */
             blebrr_gatt_role = BLEBRR_CLIENT_ROLE;
+            BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
         }
         else
         {
@@ -367,6 +414,9 @@ void blebrr_handle_evt_scan_complete (UINT8 enable)
     else
     #endif /* BLE_CLIENT_ROLE */
     {
+        if(enable && (blebrr_scanstate == 0))
+            return;
+
         /* Indicate Scan disable to bearer */
         blebrr_pl_scan_setup (blebrr_scanstate);
     }
@@ -392,7 +442,11 @@ void blebrr_init_pl (void)
 
         TODO: Check if this needs to be flag protected.
     */
-    BLEBRRPL_LOG ("Enabling Mesh Prov Service...\r\n");
+    #if(CFG_MESH_FAST_PRO)
+    BLEBRRPL_LOG ("Enabling Mesh Service...\r\n");
+    mesh_prov_init(&appl_mesh_prov_cb);
+    mesh_proxy_init(&appl_mesh_proxy_cb);
+    #endif
     //mesh_prov_init((mesh_prov_cb *)&appl_mesh_prov_cb);
     /* Initialize the bearer handle */
     blebrr_gatt_handle_pl = BRR_HANDLE_INVALID;
@@ -424,6 +478,11 @@ void blebrr_scan_pl (UCHAR enable)
         #endif /* BLEBRR_ENABLE_SCAN_TRACE */
         /* Disable Scan */
         ret = BLE_gap_set_scan_enable (0x00);
+
+        if((ret == bleIncorrectMode) && (prevstate != 0))
+        {
+            ret = 0;
+        }
     }
 
     /* Is operation failed? */
@@ -441,7 +500,16 @@ void blebrr_scan_pl (UCHAR enable)
         if(MS_TRUE == enable)
             BLEBRR_SET_STATE(BLEBRR_STATE_IN_SCAN_ENABLE);
         else
+        {
+            extern EM_timer_handle blebrr_timer_handle;
+
+            if((BLEBRR_GET_STATE()==BLEBRR_STATE_SCAN_ENABLED)&&(blebrr_timer_handle != EM_TIMER_HANDLE_INIT_VAL))
+            {
+                blebrr_timer_stop();
+            }
+
             BLEBRR_SET_STATE(BLEBRR_STATE_IN_SCAN_DISABLE);
+        }
     }
 }
 
@@ -662,8 +730,8 @@ static API_RESULT blebrr_recv_mesh_packet_pl
     /**
         TODO: MAP the incoming handle to BLEBRR specific handle for
     */
-    /*  BLEBRR_LOG("\n >>>> GATT PL Data Rx: %d bytes\n", data_len);
-        appl_dump_bytes(data, data_len); */
+//      BLEBRR_LOG("\n >>>> GATT PL Data Rx: %d bytes\n", data_len);
+//        appl_dump_bytes(data, data_len);
     blebrr_pl_recv_gattpacket
     (
         &blebrr_gatt_handle_pl,
@@ -685,7 +753,8 @@ API_RESULT blebrr_handle_le_connection_pl
         If Needed,
         Store the provided handle according to platform exposed data type
     */
-    BLEBRR_LOG("Device Connected - Handle: 0x%04X\r\n", conn_hndl);
+    BLEBRR_LOG("Device Connected - Handle: 0x%04X \r\n", conn_hndl);
+    #ifndef MS_PRIVATE_SUPPORT
 
     if (active_conn_hndl == BLEBRR_CONN_HNDL_INVALID)
     {
@@ -698,9 +767,10 @@ API_RESULT blebrr_handle_le_connection_pl
         #endif /* BLE_CLIENT_ROLE */
     }
 
+    #endif
     /* Advertisement is disable by connection mostly */
-    blebrr_advstate = 0x00;
-    blebrr_pl_advertise_end();
+//    blebrr_advstate = 0x00;
+//    blebrr_pl_advertise_end();
 
     /**
         Inform Application of GATT/BLE Link Layer Connection.
@@ -810,6 +880,16 @@ static API_RESULT blebrr_gatt_com_channel_setup_pl
 
 static uint16_t appl_mesh_prov_data_out_ccd_cb(uint16_t conn_hndl, uint8_t enabled)
 {
+//  BLEBRRPL_LOG("Mesh Prov: active_conn_hndl %x,conn_hndl %x\r\n",active_conn_hndl,conn_hndl);
+    #ifdef MS_PRIVATE_SUPPORT
+    if (active_conn_hndl == BLEBRR_CONN_HNDL_INVALID)
+    {
+        /* Store the incoming connection handle in global */
+        active_conn_hndl = conn_hndl;
+    }
+
+    #endif
+
     /* Check the Current mode is not PROV */
     if (BLEBRR_GATT_PROV_MODE != blebrr_gatt_mode_get())
     {
@@ -820,6 +900,12 @@ static uint16_t appl_mesh_prov_data_out_ccd_cb(uint16_t conn_hndl, uint8_t enabl
     if (TRUE == enabled)
     {
         BLEBRRPL_LOG("Mesh Prov Out CCD Enabled");
+        #ifdef MS_PRIVATE_SUPPORT
+        prov_conn_hndl = conn_hndl;
+        MS_prov_stop_interleave_timer();
+        MS_brr_bcast_end(BRR_BCON_TYPE_UNPROV_DEVICE, BRR_BCON_ACTIVE);
+        MS_brr_bcast_end(BRR_BCON_TYPE_UNPROV_DEVICE, BRR_BCON_PASSIVE);
+        #endif
     }
     else
     {
@@ -862,6 +948,16 @@ static uint16_t appl_mesh_prov_data_in_wt_cb
 
 static uint16_t appl_mesh_proxy_data_out_ccd_cb(uint16_t conn_hndl, uint8_t enabled)
 {
+//  BLEBRRPL_LOG("Mesh Proxy: active_conn_hndl %x,conn_hndl %x\r\n",active_conn_hndl,conn_hndl);
+    #ifdef MS_PRIVATE_SUPPORT
+    if (active_conn_hndl == BLEBRR_CONN_HNDL_INVALID)
+    {
+        /* Store the incoming connection handle in global */
+        active_conn_hndl = conn_hndl;
+    }
+
+    #endif
+
     /* Check the Current mode is not PROV */
     if (BLEBRR_GATT_PROXY_MODE != blebrr_gatt_mode_get())
     {
@@ -871,8 +967,11 @@ static uint16_t appl_mesh_proxy_data_out_ccd_cb(uint16_t conn_hndl, uint8_t enab
 
     if (TRUE == enabled)
     {
+        #ifdef MS_PRIVATE_SUPPORT
+        proxy_conn_hndl = conn_hndl;
+        MS_proxy_server_adv_stop();
+        #endif
         BLEBRRPL_LOG("Mesh Proxy Out CCD Enabled");
-        blebrr_scan_enable();
     }
     else
     {
@@ -949,8 +1048,8 @@ void appl_mesh_prov_notif_config_status_cb
         printf("Mesh Provisioning Data Out notifications %s\r\n",
                flag ?  "enabled" : "disabled");
         blebrr_gatt_mode_set(BLEBRR_GATT_PROV_MODE);
-        appl_prov_register();
-        appl_prov_setup(PROV_ROLE_PROVISIONER, PROV_BRR_GATT);
+//        appl_prov_register();
+//        appl_prov_setup(PROV_ROLE_PROVISIONER, PROV_BRR_GATT);
         blebrr_gatt_com_channel_setup_pl
         (
             BLEBRR_CLIENT_ROLE,
@@ -1012,6 +1111,7 @@ void appl_mesh_proxy_notif_config_status_cb
             BLEBRR_GATT_PROXY_MODE,
             (flag)? BLEBRR_COM_CHANNEL_CONNECT : BLEBRR_COM_CHANNEL_DISCONNECT
         );
+        blebrr_scan_enable();
     }
     else
     {
@@ -1092,6 +1192,7 @@ API_RESULT blebrr_create_gatt_conn_pl
                      "with retval 0x%04X\r\n",
                      p_bdaddr[0], p_bdaddr[1], p_bdaddr[2], p_bdaddr[3],
                      p_bdaddr[4], p_bdaddr[5], p_bdaddr_type, ret);
+        BLEBRR_SET_STATE(BLEBRR_STATE_IDLE);
         return (0 == ret) ? API_SUCCESS : API_FAILURE;
     }
 
@@ -1112,8 +1213,8 @@ API_RESULT blebrr_disconnect_pl(void)
 API_RESULT blebrr_discover_service_pl(UCHAR serv)
 {
     /* Set the mode with bearer */
-    (serv == 0) ? blebrr_gatt_mode_set(BLEBRR_GATT_PROV_MODE) :
-    blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
+//    (serv == 0) ? blebrr_gatt_mode_set(BLEBRR_GATT_PROV_MODE) :
+//    blebrr_gatt_mode_set(BLEBRR_GATT_PROXY_MODE);
     #ifdef BLE_CLIENT_ROLE
     /* Register the corresponding Callbacks */
     (serv == BLEBRR_GATT_PROV_MODE) ?             \
@@ -1148,7 +1249,7 @@ API_RESULT blebrr_handle_le_disconnection_pl
 {
     API_RESULT retval;
     retval = API_FAILURE;
-    BLEBRRPL_LOG("Device Disconnected - Handle: 0x%04X with Reason: 0x%02X\r\n", conn_hndl, reason);
+    BLEBRRPL_LOG("Device Disconnected - Handle: 0x%04X with Reason: 0x%02X \r\n", conn_hndl, reason);
 
     if (active_conn_hndl == conn_hndl)
     {
@@ -1159,16 +1260,21 @@ API_RESULT blebrr_handle_le_disconnection_pl
         /* Setting State to Idle/Disconnected */
         blebrr_connect_state = 0x00;
         #endif /* BLE_CLIENT_ROLE */
+        blebrr_gatt_role = 0xFF;
+        retval  = blebrr_pl_gatt_disconnection
+                  (
+                      &blebrr_gatt_handle_pl
+                  );
+        blebrr_gatt_handle_pl = BRR_HANDLE_INVALID;
     }
 
     /* Inform Disconnection to GATT Bearer */
-    blebrr_gatt_role = 0xFF;
-    retval  = blebrr_pl_gatt_disconnection
-              (
-                  &blebrr_gatt_handle_pl
-              );
-    blebrr_gatt_handle_pl = BRR_HANDLE_INVALID;
-
+//  blebrr_gatt_role = 0xFF;
+//  retval  = blebrr_pl_gatt_disconnection
+//          (
+//              &blebrr_gatt_handle_pl
+//          );
+//  blebrr_gatt_handle_pl = BRR_HANDLE_INVALID;
     /**
         Inform Application of GATT/BLE Link Layer Connection.
     */
@@ -1177,7 +1283,7 @@ API_RESULT blebrr_handle_le_disconnection_pl
         blebrr_gatt_iface_pl_cb
         (
             BLEBRR_GATT_IFACE_DOWN, /* BLE Link Layer Disconnection */
-            0x00  /* Status is Success */
+            conn_hndl  /* Status is Success */ /*disconnect conn_hndl*/
         );
     }
 
@@ -1195,6 +1301,9 @@ void blebrr_enable_mesh_serv_pl (UCHAR serv_type)
     if (BLEBRR_GATT_PROV_MODE == serv_type)
     {
         BLEBRRPL_LOG ("Enabling Mesh Prov Service...\r\n");
+//        #if(CFG_MESH_FAST_PRO)
+//        mesh_proxy_init(&appl_mesh_proxy_cb);
+//        #endif
         mesh_prov_init(&appl_mesh_prov_cb);
     }
     else
@@ -1203,6 +1312,7 @@ void blebrr_enable_mesh_serv_pl (UCHAR serv_type)
         mesh_proxy_init(&appl_mesh_proxy_cb);
     }
 }
+
 
 void blebrr_disable_mesh_serv_pl (UCHAR serv_type)
 {
@@ -1219,6 +1329,9 @@ void blebrr_disable_mesh_serv_pl (UCHAR serv_type)
             Disable Mesh Provisioing Serivce
         */
         mesh_prov_deinit();
+//        #if(CFG_MESH_FAST_PRO)
+//        mesh_proxy_deinit();
+//        #endif
     }
     else
     {

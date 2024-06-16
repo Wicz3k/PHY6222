@@ -5,13 +5,19 @@
 #include "multi_timer.h"
 #include "osal.h"
 #include "osal_memory.h"
-
-//timer handle list head.
+// #include "log.h"
+#include "multi.h"
+//timer handle list head. master role use head_handle list, slave role use slave_head_handle list.
 struct multiTimer* head_handle = NULL;
 
 //Timer ticks
 static uint32 _timer_ticks = 0;
-
+#if ( MAX_CONNECTION_SLAVE_NUM > 0 )
+    ///
+    struct multiTimer* slave_head_handle = NULL;
+    extern multiTimer* g_peri_conn_update_timer[MAX_CONNECTION_SLAVE_NUM];
+    extern multiTimer* g_pcu_no_success_timer[MAX_CONNECTION_SLAVE_NUM];
+#endif
 /**
     @brief  Initializes the timer struct handle.
     @param  handle: the timer handle strcut.
@@ -48,6 +54,94 @@ int multitimer_start(struct multiTimer* handle)
     head_handle = handle;
     return 0;
 }
+#if ( MAX_CONNECTION_SLAVE_NUM > 0 )
+int multitimer_start_slave(struct multiTimer* handle)
+{
+    struct multiTimer* target = slave_head_handle;
+
+    while(target)
+    {
+        if(target == handle) return -1; //already exist.
+
+        target = target->next;
+    }
+
+    handle->next = slave_head_handle;
+    slave_head_handle = handle;
+    return 0;
+}
+
+void multitimer_slave_del(struct multiTimer* handle)
+{
+    multiTimer* conn_update_entry = g_peri_conn_update_timer[0];
+    multiTimer* pcu_no_success_entry = g_pcu_no_success_timer[0];
+
+    if(conn_update_entry != NULL || pcu_no_success_entry != NULL)
+    {
+        for(uint8 i = 0 ; i < MAX_CONNECTION_SLAVE_NUM; i++)
+        {
+            if(conn_update_entry == handle)
+            {
+                // AT_LOG("del g_peri_conn_update_timer timer\n");
+                g_peri_conn_update_timer[i] = NULL;
+            }
+            else if (pcu_no_success_entry == handle)
+            {
+                // AT_LOG("del g_pcu_no_success_timer timer\n");
+                g_pcu_no_success_timer[i] = NULL;
+            }
+
+            conn_update_entry = conn_update_entry->next;
+            pcu_no_success_entry = pcu_no_success_entry->next;
+        }
+    }
+}
+
+
+void multitimer_stop_slave(struct multiTimer* handle)
+{
+    struct multiTimer** curr;
+
+    for(curr = &slave_head_handle; *curr; )
+    {
+        struct multiTimer* entry = *curr;
+
+        if (entry == handle)
+        {
+            // AT_LOG("timer stop : %p id %d  repeat:%d\n",entry,entry->id,entry->repeat);
+            *curr = entry->next;
+            /// The use of osal_mem_free causes hard fault
+            /// think about dynamic alloc multi timer buffer
+            osal_mem_free(entry);
+            multitimer_slave_del(entry);
+        }
+        else
+            curr = &entry->next;
+    }
+}
+
+void multitimer_loop_slave()
+{
+    struct multiTimer* target;
+
+    for(target=slave_head_handle; target; target=target->next)
+    {
+        if(_timer_ticks >= target->timeout)
+        {
+            target->timeout_cb(target->id);
+
+            if(target->repeat == 0)
+            {
+                multitimer_stop_slave(target);
+            }
+            else
+            {
+                target->timeout = _timer_ticks + target->repeat;
+            }
+        }
+    }
+}
+#endif
 
 /**
     @brief  Stop the timer work, remove the handle off work list.
@@ -64,7 +158,10 @@ void multitimer_stop(struct multiTimer* handle)
 
         if (entry == handle)
         {
+            // AT_LOG("timer stop : %p id %d  repeat:%d\n",entry,entry->id,entry->repeat);
             *curr = entry->next;
+            /// The use of osal_mem_free causes hard fault
+            /// think about dynamic alloc multi timer buffer
             osal_mem_free(entry);
         }
         else

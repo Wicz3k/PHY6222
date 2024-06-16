@@ -65,6 +65,9 @@ extern "C"
 #define GAPCENTRALROLE_NUM_RSSI_LINKS     4
 #endif
 
+#define HCI_BLE_SCAN_TIMEOUT_EVENT                     0x11
+#define GAP_EXTSCAN_MAX_SCAN_NUM                       3
+#define GAP_EXTSCAN_DATALEN                            1300
 /*********************************************************************
     VARIABLES
 */
@@ -116,6 +119,118 @@ typedef struct
     pfnGapCentralRoleRssiCB_t   rssiCB;   //!< RSSI callback.
     pfnGapCentralRoleEventCB_t  eventCB;  //!< Event callback.
 } gapCentralRoleCB_t;
+
+//for extscan report
+typedef struct
+{
+    osal_event_hdr_t  hdr;
+    uint8  BLEEventCode;
+} hciEvt_ScanTimeout_t;
+typedef void (*gapProcessExtScanningEvt_t)( hciEvt_BLEExtAdvPktReport_t* pMsg );
+typedef void (*gapProcessExtScanTimeoutEvt_t)(hciEvt_ScanTimeout_t* pMsg);
+typedef struct
+{
+    //gapProcessHCICmdEvt_t   pfnProcessHCICmdEvt;   // When HCI Command Event received
+    gapProcessExtScanningEvt_t pfnProcessExtScanningEvt; // When Scanning Report received
+    gapProcessExtScanTimeoutEvt_t pfnProcessEvtScanTimeoutEvt;   //When scantimeout event received
+} gapExtCentralCBs_t;
+
+typedef struct
+{
+    uint16  advEvt;
+    uint8   advAddrType;
+    uint8   advAddr[B_ADDR_LEN];
+    uint8   primaryPHY;
+    uint8   secondaryPHY;
+    uint8   advertisingSID;
+    uint8   txPower;
+    int8    rssi;
+    uint16  periodicAdvertisingInterval;
+    uint8   directAddrType;
+    uint8   directAddr[B_ADDR_LEN];
+    uint16   dataLen;
+    uint8   rptData[GAP_EXTSCAN_DATALEN];
+} gapExtScan_AdvRpt_t;
+
+typedef struct
+{
+    uint8   inuse;
+    uint8   datafull;
+    uint8   datacompleted;
+    uint8   datatruncated;
+    gapExtScan_AdvRpt_t   advrpt;
+} gapExtScan_AdvInfo_t;
+
+typedef struct
+{
+    uint8 own_address_type;
+    uint8 scanning_filter_policy;
+    uint8 scanning_PHYs;
+    uint8 scan_type[2];
+    uint16 scan_interval[2];
+    uint16 scan_window[2];
+} gapExtScan_Parameters_t;
+
+typedef struct
+{
+    uint8      initiator_filter_policy;
+    uint8      own_address_type;
+    uint8      peer_address_type;
+    uint8      peer_address[B_ADDR_LEN];
+    uint8      initiating_PHYs;
+    uint16     scan_interval[3];
+    uint16     scan_window[3];
+    uint16     conn_interval_min[3];
+    uint16     conn_interval_max[3];
+    uint16     conn_latency[3];
+    uint16     supervision_timeout[3];
+    uint16     minimum_CE_length[3];
+    uint16     maximum_CE_length[3];
+} gapExtInit_Parameters_t;
+
+typedef enum
+{
+    //extscan param
+    GAPEXTSCAN_OWNADDRTYPE           =0,
+    GAPEXTSCAN_FILTERPOLICY          =1,
+    GAPEXTSCAN_SCANPHYS,
+    GAPEXTSCAN_1MPHY_SCANTYPE,
+    GAPEXTSCAN_1MPHY_SCANINTERVAL,
+    GAPEXTSCAN_1MPHY_SCANWINDOW,
+    GAPEXTSCAN_CODEDPHY_SCANTYPE,
+    GAPEXTSCAN_CODEDPHY_SCANINTERVAL,
+    GAPEXTSCAN_CODEDPHY_SCANWINDOW,
+    GAPEXTSCAN_FILTERDUPLICATES,
+    GAPEXTSCAN_SCANDURATION,
+    //extscan rptfilter
+    GAPEXTSCAN_LEGACYADV_RPTFILTER,
+    //extinit param
+    GAPEXTINIT_FILTERPOLICY,
+    GAPEXTINIT_OWNADDRTYPE,
+    GAPEXTINIT_INITPHYS,
+
+    GAPEXTINIT_1MPHY_SCANINTERVAL,
+    GAPEXTINIT_1MPHY_SCANWINDOW,
+    GAPEXTINIT_1MPHY_CONNINTERVAL_MIN,
+    GAPEXTINIT_1MPHY_CONNINTERVAL_MAX,
+    GAPEXTINIT_1MPHY_CONNLATENCY,
+    GAPEXTINIT_1MPHY_TIMEOUT,
+
+    GAPEXTINIT_2MPHY_SCANINTERVAL,
+    GAPEXTINIT_2MPHY_SCANWINDOW,
+    GAPEXTINIT_2MPHY_CONNINTERVAL_MIN,
+    GAPEXTINIT_2MPHY_CONNINTERVAL_MAX,
+    GAPEXTINIT_2MPHY_CONNLATENCY,
+    GAPEXTINIT_2MPHY_TIMEOUT,
+
+    GAPEXTINIT_CODEDPHY_SCANINTERVAL,
+    GAPEXTINIT_CODEDPHY_SCANWINDOW,
+    GAPEXTINIT_CODEDPHY_CONNINTERVAL_MIN,
+    GAPEXTINIT_CODEDPHY_CONNINTERVAL_MAX,
+    GAPEXTINIT_CODEDPHY_CONNLATENCY,
+    GAPEXTINIT_CODEDPHY_TIMEOUT
+
+} gapExtCentralConfig_e;
 
 /*********************************************************************
     VARIABLES
@@ -288,7 +403,13 @@ extern void GAPCentralRole_Init( uint8 taskId );
     @return  events not processed
 */
 extern uint16 GAPCentralRole_ProcessEvent( uint8 taskId, uint16 events );
-
+#ifdef EXT_ADV_ENABLE
+extern bStatus_t GAPExtCentralRole_SetParameter(uint16 param, uint16 len, void* pValue);
+extern bStatus_t GAPExtCentralRole_GetParameter(uint16 param,  void* pValue);
+extern bStatus_t GAPExtCentralRole_EnableExtScan(void);
+extern bStatus_t GAPExtCentralRole_DisableExtScan(void);
+extern bStatus_t GAPExtCentralRole_Createconn(uint8 peer_address_type,uint8* peer_address);
+#endif
 /*********************************************************************
 *********************************************************************/
 

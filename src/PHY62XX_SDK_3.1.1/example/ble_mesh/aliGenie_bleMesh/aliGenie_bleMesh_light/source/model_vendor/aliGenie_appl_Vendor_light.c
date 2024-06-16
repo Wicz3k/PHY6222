@@ -38,15 +38,19 @@ API_RESULT light_powerstate_set(UI_DATA_ALIGENIE_MODEL_T* me, UINT32 data)
     TRACELOG_PRINT();
     MS_NET_ADDR saddr;
     UINT8 state = (UINT8)(data & 0x00000001);
-    UINT8 io_num = me->generic_onoff_me->io_num;
+//    UINT8 io_num = me->generic_onoff_me->io_num;
 
     if (state)
     {
-        light_ctrl(io_num, LIGHT_TOP_VALUE-1);
+        light_ctrl(LIGHT_RED, LIGHT_TOP_VALUE-1);
+        light_ctrl(LIGHT_GREEN, LIGHT_TOP_VALUE-1);
+        light_ctrl(LIGHT_BLUE, LIGHT_TOP_VALUE-1);
     }
     else
     {
-        light_ctrl(io_num, 0);
+        light_ctrl(LIGHT_RED, 0);
+        light_ctrl(LIGHT_GREEN, 0);
+        light_ctrl(LIGHT_BLUE, 0);
     }
 
     MS_ACCESS_ELEMENT_HANDLE element_handle;
