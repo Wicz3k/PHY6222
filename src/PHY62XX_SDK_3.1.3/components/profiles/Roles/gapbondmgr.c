@@ -2171,6 +2171,7 @@ static void gapBondMgrBondReq( uint16 connHandle, uint8 idx, uint8 stateFlags,
             bStatus_t ret = GAP_Bond( connHandle,
                                       ((stateFlags & GAP_BONDED_STATE_AUTHENTICATED) ? TRUE : FALSE),
                                       &ltk, startEncryption );
+            (void)ret;
         }
     }
 }

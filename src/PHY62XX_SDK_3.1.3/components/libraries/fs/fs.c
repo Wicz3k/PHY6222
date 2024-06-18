@@ -789,10 +789,12 @@ int hal_fs_item_write(uint16_t id,uint8_t* buf,uint16_t len)
     {
         if(write_len > FS_ITEM_DATA_LEN)
         {
-            if(write_len == write_len)
+            
+            //#TODO This is always true
+            //if(write_len == write_len)
                 i1.b.frame = ITEM_MF_F;
-            else
-                i1.b.frame = ITEM_MF_C;
+            //else
+            //    i1.b.frame = ITEM_MF_C;
 
             frame_len = FS_ITEM_DATA_LEN;
             write_len -= FS_ITEM_DATA_LEN;

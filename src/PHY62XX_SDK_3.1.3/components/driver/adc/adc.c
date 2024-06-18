@@ -59,11 +59,17 @@
 static uint32_t adc_compare_enable_flag = 0;
 static uint32_t adc_compare_filter_counter = 0;
 
+static void hal_adc_load_calibration_value(void);
+
+static void adc_compare_cb(uint16_t ch,uint32_t status);
+static void __attribute__((used)) hal_ADC_compare_IRQHandler(void);
 
 
 static bool mAdc_init_flg = FALSE;
 
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-braces"
 static adc_Ctx_t mAdc_Ctx =
 {
     .enable = FALSE,
@@ -73,6 +79,7 @@ static adc_Ctx_t mAdc_Ctx =
 
     .evt_handler = NULL
 };
+#pragma GCC diagnostic pop
 
 static uint8_t  adc_cal_read_flag = 0;
 static uint16_t adc_cal_postive = 0x0fff;
@@ -447,8 +454,8 @@ int hal_adc_config_channel(adc_Cfg_t cfg, adc_Hdl_t evt_handler)
     {
         return PPlus_ERR_NOT_SUPPORTED;
     }
-
-    if((!cfg.channel & BIT(1))&&(cfg.is_differential_mode && (cfg.channel & BIT(1))))
+    //#TODO This can't happen 
+    if(((!cfg.channel) & BIT(1))&&(cfg.is_differential_mode && (cfg.channel & BIT(1))))
     {
         return PPlus_ERR_INVALID_PARAM;
     }

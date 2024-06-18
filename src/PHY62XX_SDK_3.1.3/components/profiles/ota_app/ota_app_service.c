@@ -283,8 +283,8 @@ static void process_cmd(uint16_t conn_handle, uint8_t* cmdbuf, uint8_t size)
     case OTAAPP_CMD_INFO:
     {
         //take mac address and version info
-        uint8_t info_rsp[20];
-        osal_memset(info_rsp, 0, 20);
+        uint8_t info_rsp[21];
+        osal_memset(info_rsp, 0, 21);
         info_rsp[0] = PPlus_SUCCESS;
         LL_ReadBDADDR(&info_rsp[1]);
 

@@ -288,7 +288,7 @@ extern void LL_ENC_AES128_Encrypt( uint8* key,uint8* plaintext,uint8* ciphertext
 #define ppsp_impl_set_msgs_numb(msgs, numb)                     \
     {                                                           \
         if ( 0 != (msgs) )                                      \
-            ((uint8*)(msgs))[0] = (((uint8*)(msgs))[0]&~0x0F) | (numb)&0x0F;\
+            ((uint8*)(msgs))[0] = (((uint8*)(msgs))[0]&~0x0F) | ((numb)&0x0F);\
     }
 
 #define ppsp_impl_get_msgs_encr(msgs, flag)                     \
@@ -3070,7 +3070,7 @@ ppsp_impl_reg_serv_appl( ppsp_impl_clit_hdlr_t* clit_hdlr )
     if ( clit_hdlr )
     {
         __ppsp_impl_clit_hdlr = clit_hdlr;
-        __ppsp_impl_clit_hdlr->ppsp_impl_appl_writ_hdlr = (void(*)())ppsp_serv_set_para;    // func type casting
+        __ppsp_impl_clit_hdlr->ppsp_impl_appl_writ_hdlr = (void(*)(uint8,  void *, uint16))ppsp_serv_set_para;    // func type casting
         // __ppsp_impl_clit_hdlr->ppsp_impl_appl_noti_hdlr = ppsp_impl_serv_rmsg_hdlr;
         __ppsp_serv_appl_hdlr.ppsp_serv_char_upda_hdlr = ppsp_impl_serv_rmsg_hdlr;
         ppsp_serv_reg_appl(&__ppsp_serv_appl_hdlr);

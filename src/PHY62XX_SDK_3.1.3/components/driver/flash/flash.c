@@ -50,15 +50,15 @@
 
 #define SPIF_WAIT_IDLE_CYC                          (32)
 
-#define SPIF_STATUS_WAIT_IDLE(n)                    \
-    do                                              \
-    {                                               \
-        while((AP_SPIF->fcmd &0x02)==0x02);         \
-        {                                           \
-            volatile int delay_cycle = n;           \
-            while (delay_cycle--){;}                \
-        }                                           \
-        while ((AP_SPIF->config & 0x80000000) == 0);\
+#define SPIF_STATUS_WAIT_IDLE(n)                        \
+    do                                                  \
+    {                                                   \
+        while((AP_SPIF->fcmd &0x02)==0x02){;}           \
+        {                                               \
+            volatile int delay_cycle = n;               \
+            while (delay_cycle--){;}                    \
+        }                                               \
+        while ((AP_SPIF->config & 0x80000000) == 0){;}  \
     } while (0);
 
 
