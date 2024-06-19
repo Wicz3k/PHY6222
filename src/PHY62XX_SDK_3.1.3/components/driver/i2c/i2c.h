@@ -71,9 +71,11 @@ extern "C" {
 #define I2C_USE_TIMEOUT 1
 #if(I2C_USE_TIMEOUT == 1)
 #define I2C_INIT_TOUT(to) int to = hal_systick()
+#define I2C_RELOAD_TOUT(to) to = hal_systick()
 #define I2C_CHECK_TOUT(to, timeout, loginfo) {if(hal_ms_intv(to) > timeout){LOG(loginfo);return PPlus_ERR_TIMEOUT;}}
 #else
 #define I2C_INIT_TOUT(to)
+#define I2C_RELOAD_TOUT(to)
 #define I2C_CHECK_TOUT(to, timeout, loginfo)
 #endif
 

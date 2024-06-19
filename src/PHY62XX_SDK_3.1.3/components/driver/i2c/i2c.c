@@ -426,9 +426,11 @@ int _hal_i2c_read_s(void* pi2c, uint8_t slave_addr, uint8_t reg, uint8_t* data, 
 
             if(size == 0)
                 break;
+                
+            I2C_RELOAD_TOUT(to);
         }
 
-        I2C_CHECK_TOUT(to, I2C_OP_TIMEOUT*size, "I2C RD TO\n");
+        I2C_CHECK_TOUT(to, I2C_OP_TIMEOUT, "I2C RD TO\n");
     }
 
     return PPlus_SUCCESS;
