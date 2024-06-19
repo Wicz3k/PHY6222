@@ -1103,9 +1103,9 @@ static void
 ppsp_impl_prc_serv_msgs_verf(uint8* msgs)
 {
     // uint8   msgn;
-    uint8   encr;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   encr = 0;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
@@ -1143,9 +1143,9 @@ ppsp_impl_prc_serv_msgs_nets(uint8* msgs)
     logs_ent("");
     logs_ver("proc info network status ...");
     // uint8   msgn;
-    uint8   encr;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   encr = 0;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
@@ -1745,9 +1745,9 @@ ppsp_impl_prc_serv_msgs_vers(uint8* msgs)
     logs_ent("");
     logs_ver("proc reqs firmware version ...");
     // uint8   msgn;
-    uint8   encr;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   encr = 0;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
@@ -1792,9 +1792,9 @@ ppsp_impl_prc_serv_msgs_upda(uint8* msgs)
     logs_ent("");
     logs_ver("proc reqs binary update ...");
     // uint8   msgn;
-    uint8   encr;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   encr = 0;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
@@ -1888,8 +1888,8 @@ ppsp_impl_prc_serv_msgs_pack(uint8* msgs)
     uint8   msgn;
     // uint8   encr;
     uint8   alln, seqn;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     ppsp_impl_get_msgs_numb(msgs, msgn);
     // ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_seqn(msgs, alln, seqn);
@@ -2045,9 +2045,9 @@ ppsp_impl_prc_serv_msgs_mconfirm(uint8* msgs)
     logs_ent("");
     logs_inf("proc reqs mconfirm key ...");
     // uint8   msgn;
-    uint8   encr;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   encr = 0;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
@@ -2091,9 +2091,9 @@ ppsp_impl_prc_serv_msgs_mrand(uint8* msgs)
     logs_ent("");
     logs_inf("proc reqs mrand key ...");
     // uint8   msgn;
-    uint8   encr;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   encr = 0;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
@@ -2137,9 +2137,9 @@ ppsp_impl_prc_serv_msgs_mverify(uint8* msgs)
     logs_ent("");
     logs_inf("proc reqs mverify key ...");
     // uint8   msgn;
-    uint8   encr;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   encr = 0;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
@@ -2779,9 +2779,9 @@ ppsp_impl_prc_clit_msgs_pack(uint8* msgs)
     logs_ent("");
     logs_ver("trgt rspn firmware pack ...");
     // uint8   msgn;
-    uint8   encr;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   encr = 0;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
@@ -2855,9 +2855,9 @@ ppsp_impl_prc_clit_msgs_comp(void* msgs)
     logs_ent("");
     logs_ver("trgt rspn comp with crcs rslt ...");
     // uint8   msgn;
-    uint8   encr;
-    uint8   frsz;
-    uint8*  plds;
+    uint8   encr = 0;
+    uint8   frsz = 0;
+    uint8*  plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
@@ -2909,8 +2909,8 @@ ppsp_impl_serv_rmsg_hdlr(uint8 para, const void* valu, uint16 coun)
         return;
     }
 
-    uint8 msgn;
-    uint8 opco;
+    uint8 msgn = 0;
+    uint8 opco = 0;
     ppsp_impl_get_msgs_numb(valu, msgn);
     ppsp_impl_get_msgs_opco(valu, opco);
     __ppsp_impl_msgs_numb = msgn;
@@ -2998,7 +2998,7 @@ ppsp_impl_clit_rmsg_hdlr(uint8 para, void* valu, uint16 coun)
     //     __ppsp_impl_msgs_numb  = 0;
     // else
     //     __ppsp_impl_msgs_numb += 1;
-    uint8 opco;
+    uint8 opco = 0;
     ppsp_impl_get_msgs_opco(valu, opco);
 
     if ( PPSP_IMPL_CFGS_OPCO_CIPR_RESP == opco )

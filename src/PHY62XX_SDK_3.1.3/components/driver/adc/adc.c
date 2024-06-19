@@ -607,6 +607,10 @@ int hal_adc_config_channel(adc_Cfg_t cfg, adc_Hdl_t evt_handler)
             break;
 
         default:
+            pin = 0;
+            pin_neg = 0;
+            chn_sel = 0;
+            evt_index = 0;
             break;
         }
 
