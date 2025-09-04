@@ -32,3 +32,8 @@
 相对于QFN32封装的PHY6222，工业场景也可选SSOP24封装的[PHY6252](http://wiki.phyplusinc.com/doku.php?id=menu:phy62_series:phy6252)
 
 ## [www.SoC.xin](http://www.SoC.Xin)
+
+## Important notes
+
+Do not use pins near RF pin for high frequency signals (for example 10KHz). It can cause damaged ble frames and trubles with detect device on Android system!
+
