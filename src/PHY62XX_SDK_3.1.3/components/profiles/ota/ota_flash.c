@@ -512,7 +512,7 @@ int ota_flash_erase_area(uint32_t flash_addr, uint32_t size)
     if(ret)
         return ret;
 
-    if((flash_addr & 0xffff  == 0 ) && (size & 0xffff == 0))  //case 64K align, erase block
+    if(((flash_addr & 0xffff)  == 0 ) && ((size & 0xffff) == 0))  //case 64K align, erase block
     {
         for(offset= 0; offset < size; offset += 64*1024)
             hal_flash_erase_block64(flash_addr + offset);

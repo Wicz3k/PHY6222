@@ -367,7 +367,7 @@ bool validate_partition_parameter(ota_part_t* ppart)
         if(ppart->flash_addr != 0)
             return FALSE;
 
-        if(ppart->run_addr&OTAF_BASE_ADDR != OTAF_BASE_ADDR || ppart->run_addr + ppart->size > OTAF_END_ADDR+1 || ppart->size>OTA_PBUF_SIZE)
+        if((ppart->run_addr&OTAF_BASE_ADDR) != OTAF_BASE_ADDR || ppart->run_addr + ppart->size > OTAF_END_ADDR+1 || ppart->size>OTA_PBUF_SIZE)
             return FALSE;
 
         if(ppart->run_addr < OTAF_1st_BOOTINFO_ADDR + OTAF_1st_BOOTINFO_SIZE)
