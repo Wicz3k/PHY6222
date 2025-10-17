@@ -777,7 +777,7 @@ int hal_fs_item_write(uint16_t id,uint8_t* buf,uint16_t len)
     i1.b.id = id;
     i1.b.pro = ITEM_USED;
 
-    if(len <= FS_ITEM_DATA_LEN)
+    if (len <= FS_ITEM_DATA_LEN) // Should be write_len but does not matter because of condidion in while loop
         i1.b.frame = ITEM_SF;
 
     i = 0;
@@ -790,11 +790,10 @@ int hal_fs_item_write(uint16_t id,uint8_t* buf,uint16_t len)
         if(write_len > FS_ITEM_DATA_LEN)
         {
             
-            //#TODO This is always true
-            //if(write_len == write_len)
+            if (i == 0) //(write_len == write_len) //It was always true
                 i1.b.frame = ITEM_MF_F;
-            //else
-            //    i1.b.frame = ITEM_MF_C;
+            else
+                i1.b.frame = ITEM_MF_C;
 
             frame_len = FS_ITEM_DATA_LEN;
             write_len -= FS_ITEM_DATA_LEN;
