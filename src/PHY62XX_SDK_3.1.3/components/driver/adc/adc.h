@@ -242,16 +242,12 @@ float hal_adc_value_cal(adc_CH_t ch,uint16_t* buf, uint32_t size, uint8_t high_r
 
 int hal_adc_deinit(void);
 
-static void hal_adc_load_calibration_value(void);
-
 int hal_adc_compare_start(void);
 
 
 #define ADC_COMPARE_FILTER_MAX_TIME  10
 
 
-static void adc_compare_cb(uint16_t ch,uint32_t status);
-static void __attribute__((used)) hal_ADC_compare_IRQHandler(void);
 int hal_poilling_adc_stop(void);
 extern int hal_adc_compare_enable(adc_CH_t ch,uint32_t flag,uint32_t th_high,uint32_t th_low);
 extern  int hal_adc_comppare_reset(adc_CH_t ch);

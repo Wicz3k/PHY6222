@@ -59,7 +59,10 @@
 static uint32_t adc_compare_enable_flag = 0;
 static uint32_t adc_compare_filter_counter = 0;
 
+static void hal_adc_load_calibration_value(void);
 
+static void adc_compare_cb(uint16_t ch,uint32_t status);
+static void __attribute__((used)) hal_ADC_compare_IRQHandler(void);
 
 static bool mAdc_init_flg = FALSE;
 
