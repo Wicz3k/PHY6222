@@ -773,7 +773,7 @@ float hal_adc_value_cal(adc_CH_t ch, uint16_t *buf, uint32_t size, uint8_t high_
 {
     uint32_t i;
     int adc_sum = 0;
-    volatile float result = 0.0;
+    volatile float result = 0.0f;
 
     for (i = 0; i < size; i++)
     {
@@ -786,7 +786,7 @@ float hal_adc_value_cal(adc_CH_t ch, uint16_t *buf, uint32_t size, uint8_t high_
     // LOG("adc_sum:%10d %10d ",adc_sum,adc_sum/(MAX_ADC_SAMPLE_SIZE-3));
     if ((adc_cal_postive != 0xfff) && (adc_cal_negtive != 0xfff))
     {
-        float delta = ((int)(adc_cal_postive - adc_cal_negtive)) / 2.0;
+        float delta = ((int)(adc_cal_postive - adc_cal_negtive)) / 2.0f;
 
         if (ch & 0x01)
         {
@@ -806,11 +806,11 @@ float hal_adc_value_cal(adc_CH_t ch, uint16_t *buf, uint32_t size, uint8_t high_
 
     if (high_resol == TRUE)
     {
-        result *= 0.8;
+        result *= 0.8f;
     }
     else
     {
-        result = (float)result * (float)adc_Lambda[ch] * 0.8 / 1000000;
+        result = (float)result * (float)adc_Lambda[ch] * 0.8f / 1000000;
     }
 
     return result;
