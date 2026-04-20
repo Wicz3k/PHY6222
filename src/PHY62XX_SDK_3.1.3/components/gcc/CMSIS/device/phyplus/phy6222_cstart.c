@@ -42,6 +42,7 @@ extern const uint32_t _edata;
 
 //extern void *osal_memset(void *s, uint8 c, size_t n);
 extern void* osal_memcpy(void* dest, const void* src, size_t n);
+extern int main(void);
 
 void c_start(void)
 {
@@ -66,10 +67,7 @@ void c_start(void)
     dest = (uint8_t*)&_sdata;
     edest = (uint8_t*)&_edata;
     osal_memcpy(dest, src, edest - dest);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
     main();
-#pragma GCC diagnostic pop
     /* Shouldn't get here */
 
     for (; ; );
