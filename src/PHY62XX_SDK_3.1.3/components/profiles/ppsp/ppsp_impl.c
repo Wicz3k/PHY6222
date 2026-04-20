@@ -1939,9 +1939,10 @@ ppsp_impl_prc_serv_msgs_pack(uint8 *msgs)
 {
     logs_ent("");
     logs_ver("proc push of binary pack ...");
-    uint8 msgn;
+    uint8 msgn = 0;
     // uint8   encr;
-    uint8 alln, seqn;
+    uint8 alln = 0;
+    uint8 seqn = 0;
     uint8 frsz = 0;
     uint8 *plds = 0;
     ppsp_impl_get_msgs_numb(msgs, msgn);
@@ -2007,9 +2008,9 @@ ppsp_impl_prc_serv_msgs_comp(uint8 *msgs)
     logs_ent("");
     logs_ver("proc issu of binary comp ...");
     // uint8   msgn;
-    uint8 encr;
-    uint8 frsz;
-    uint8 *plds;
+    uint8 encr = 0;
+    uint8 frsz = 0;
+    uint8 *plds = 0;
     // ppsp_impl_get_msgs_numb(msgs, msgn);
     ppsp_impl_get_msgs_encr(msgs, encr);
     ppsp_impl_get_msgs_frsz(msgs, frsz);
