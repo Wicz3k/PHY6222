@@ -567,10 +567,15 @@ int flash_write_word(unsigned int offset, uint32_t  value)
     return (hal_flash_write_by_dma (offset, (uint8_t*) &temp, 4));
 }
 
-CHIP_ID_STATUS_e read_chip_mAddr(void)
+CHIP_ID_STATUS_e read_chip_mAddr_ex(chipMAddr_t* chipMAddr)
 {
     CHIP_ID_STATUS_e ret = CHIP_ID_UNCHECK;
     uint8_t b;
+
+    if(chipMAddr == NULL)
+    {
+        return CHIP_ID_INVALID;
+    }
 
     for(int i=0; i<CHIP_MADDR_LEN; i++)
     {
@@ -578,7 +583,7 @@ CHIP_ID_STATUS_e read_chip_mAddr(void)
 
         if(ret==CHIP_ID_VALID)
         {
-            g_chipMAddr.mAddr[CHIP_MADDR_LEN-1-i]=b;
+            chipMAddr->mAddr[CHIP_MADDR_LEN-1-i]=b;
         }
         else
         {
@@ -594,36 +599,57 @@ CHIP_ID_STATUS_e read_chip_mAddr(void)
     return ret;
 }
 
-void check_chip_mAddr(void)
+CHIP_ID_STATUS_e read_chip_mAddr(void)
 {
+    return read_chip_mAddr_ex(&g_chipMAddr);
+}
+
+void get_chip_mAddr_ex(chipMAddr_t* chipMAddr)
+{
+    if(chipMAddr == NULL)
+    {
+        return;
+    }
+
     //chip id check
     for(int i=0; i<CHIP_MADDR_LEN; i++)
     {
-        g_chipMAddr.mAddr[i]=0xff;
+        chipMAddr->mAddr[i]=0xff;
     }
 
-    g_chipMAddr.chipMAddrStatus=read_chip_mAddr();
+    chipMAddr->chipMAddrStatus=read_chip_mAddr_ex(chipMAddr);
 }
 
-void LOG_CHIP_MADDR(void)
+void check_chip_mAddr(void)
+{
+    get_chip_mAddr_ex(&g_chipMAddr);
+}
+
+void LOG_CHIP_MADDR_ex(const chipMAddr_t* chipMAddr)
 {
     LOG("\n");
 
-    if(g_chipMAddr.chipMAddrStatus==CHIP_ID_EMPTY)
+    if(chipMAddr == NULL)
+    {
+        LOG("[CHIP_MADDR UNCHECKED]\n");
+        return;
+    }
+
+    if(chipMAddr->chipMAddrStatus==CHIP_ID_EMPTY)
     {
         LOG("[CHIP_MADDR EMPTY]\n");
     }
-    else if(g_chipMAddr.chipMAddrStatus==CHIP_ID_INVALID)
+    else if(chipMAddr->chipMAddrStatus==CHIP_ID_INVALID)
     {
         LOG("[CHIP_MADDR INVALID]\n");
     }
-    else if(g_chipMAddr.chipMAddrStatus==CHIP_ID_VALID)
+    else if(chipMAddr->chipMAddrStatus==CHIP_ID_VALID)
     {
         LOG("[CHIP_MADDR VALID]\n");
 
         for(int i=0; i<CHIP_MADDR_LEN; i++)
         {
-            LOG("%02x",g_chipMAddr.mAddr[i]);
+            LOG("%02x",chipMAddr->mAddr[i]);
         }
 
         LOG("\n");
@@ -632,5 +658,10 @@ void LOG_CHIP_MADDR(void)
     {
         LOG("[CHIP_MADDR UNCHECKED]\n");
     }
+}
+
+void LOG_CHIP_MADDR(void)
+{
+    LOG_CHIP_MADDR_ex(&g_chipMAddr);
 }
 

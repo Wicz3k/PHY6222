@@ -195,7 +195,9 @@ void LL_PLUS_LoadMACFromFlash(uint32_t addr);
 
 CHIP_ID_STATUS_e LL_PLUS_LoadMACFromChipMAddr(void);
 
-
+void get_chip_mAddr_ex(chipMAddr_t *chipMAddr);
+void LOG_CHIP_MADDR_ex(const chipMAddr_t *chipMAddr);
+CHIP_ID_STATUS_e read_chip_mAddr(void);
 void check_chip_mAddr(void);
 void LOG_CHIP_MADDR(void);
 
